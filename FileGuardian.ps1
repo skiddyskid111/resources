@@ -55,3 +55,4 @@ function Run-Payload {
 # 📌 Main execution:
 Set-Persistence
 Run-Payload
+Pause
