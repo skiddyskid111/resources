@@ -1,4 +1,6 @@
-# Attempt to elevate to administrative privileges if not already admin
+Write-Output "Hello"
+Start-Sleep -Seconds 60
+<## Attempt to elevate to administrative privileges if not already admin
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     try {
@@ -177,3 +179,4 @@ while (-not $success -and $retryCount -lt $maxRetries) {
         if ($webClient) { $webClient.Dispose() }
     }
 }
+#>
