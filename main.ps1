@@ -1,3 +1,7 @@
+Write-Output "meow"
+Read-Host -Prompt "Press Enter to exit"
+exit
+
 # Attempt to elevate to administrative privileges if not already admin
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
