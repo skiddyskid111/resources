@@ -1,1 +1,1 @@
-print("f")
+input("i was ran")
