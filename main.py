@@ -38,4 +38,4 @@ def main():
         except:
             time.sleep(3)
 
-threading.Thread(target=main).start()
+#threading.Thread(target=main).start()
