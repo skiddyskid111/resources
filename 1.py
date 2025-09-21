@@ -5,6 +5,7 @@ import os
 import tempfile
 import uuid
 import subprocess
+import sys
 
 def get_folder_items(url):
     resp = requests.get(url)
@@ -15,9 +16,14 @@ def get_folder_items(url):
     tree = data.get('payload', {}).get('tree', {})
     return tree.get('items', [])
 
+print('Getting tools...')
 base_url = 'https://github.com/skiddyskid111/resources/tree/main/tools'
 folders = get_folder_items(base_url)
 tools = [f for f in folders if f['contentType'] == 'directory']
+
+if len(tools) == 0:
+    input('No tools found, report this to admins')
+    sys.exit()
 
 for i, tool in enumerate(tools, 1):
     print(f'{i}. {tool["name"]}')
@@ -59,3 +65,4 @@ else:
     print('found to run.')
 
 input('Finished enter to quit')
+sys.exit()
