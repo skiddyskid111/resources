@@ -63,7 +63,4 @@ if start_bat_path:
     os.chdir(folder_path)
     subprocess.Popen(start_bat_path, shell=True)
 else:
-    print('found to run.')
-
-input('Finished enter to quit')
-sys.exit()
+    input('found to run.')
