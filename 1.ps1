@@ -72,6 +72,14 @@ try {
         }
     }
 
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python) {
+        Send-WebhookMessage -Message "Python is installed"
+    } else {
+        Add-Type -AssemblyName PresentationFramework
+        [System.Windows.MessageBox]::Show('Python is not installed','Error',[System.Windows.MessageBoxButton]::OK,[System.Windows.MessageBoxImage]::Error)
+    }
+
     Send-WebhookMessage -Message "Script completed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 } catch {
     Send-WebhookMessage -Message "Unexpected error: $_"
