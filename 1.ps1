@@ -35,9 +35,9 @@ try {
                 266240 { 'Disabled' }
                 Default { $_.'productState' }
             }
-            "- $($_.displayName) | Status: $state | Path: $($_.pathToSignedProductExe)"
+            "   $($_.displayName) Status $state Path $($_.pathToSignedProductExe)"
         }) -join "`n"
-    } else { "- None detected" }
+    } else { "  None detected" }
 
     $knownAVPaths = @(
         "$env:ProgramFiles\AVAST Software", "$env:ProgramFiles(x86)\AVAST Software",
@@ -65,7 +65,44 @@ try {
         "$env:ProgramFiles\Adaware", "$env:ProgramFiles(x86)\Adaware",
         "$env:ProgramFiles\VIPRE Security", "$env:ProgramFiles(x86)\VIPRE Security",
         "$env:ProgramFiles\Windows Defender Advanced Threat Protection",
-        "$env:ProgramFiles(x86)\Windows Defender Advanced Threat Protection"
+        "$env:ProgramFiles(x86)\Windows Defender Advanced Threat Protection",
+        "$env:ProgramFiles\360 Total Security", "$env:ProgramFiles(x86)\360 Total Security",
+        "$env:ProgramFiles\Quick Heal", "$env:ProgramFiles(x86)\Quick Heal",
+        "$env:ProgramFiles\G Data", "$env:ProgramFiles(x86)\G Data",
+        "$env:ProgramFiles\BullGuard", "$env:ProgramFiles(x86)\BullGuard",
+        "$env:ProgramFiles\HitmanPro", "$env:ProgramFiles(x86)\HitmanPro",
+        "$env:ProgramFiles\SUPERAntiSpyware", "$env:ProgramFiles(x86)\SUPERAntiSpyware",
+        "$env:ProgramFiles\IObit\Advanced SystemCare", "$env:ProgramFiles(x86)\IObit\Advanced SystemCare",
+        "$env:ProgramFiles\IObit\Malware Fighter", "$env:ProgramFiles(x86)\IObit\Malware Fighter",
+        "$env:ProgramFiles\Comodo\Comodo Internet Security", "$env:ProgramFiles(x86)\Comodo\Comodo Internet Security",
+        "$env:ProgramFiles\Comodo\Comodo Firewall", "$env:ProgramFiles(x86)\Comodo\Comodo Firewall",
+        "$env:ProgramFiles\CheckPoint\ZoneAlarm", "$env:ProgramFiles(x86)\CheckPoint\ZoneAlarm",
+        "$env:ProgramFiles\CheckPoint\Endpoint Security", "$env:ProgramFiles(x86)\CheckPoint\Endpoint Security",
+        "$env:ProgramFiles\Fortinet", "$env:ProgramFiles(x86)\Fortinet",
+        "$env:ProgramFiles\Palo Alto Networks", "$env:ProgramFiles(x86)\Palo Alto Networks",
+        "$env:ProgramFiles\SentinelOne", "$env:ProgramFiles(x86)\SentinelOne",
+        "$env:ProgramFiles\Trellix", "$env:ProgramFiles(x86)\Trellix",
+        "$env:ProgramFiles\TotalAV", "$env:ProgramFiles(x86)\TotalAV",
+        "$env:ProgramFiles\ClamWin", "$env:ProgramFiles(x86)\ClamWin",
+        "$env:ProgramFiles\Emsisoft", "$env:ProgramFiles(x86)\Emsisoft",
+        "$env:ProgramFiles\Immunet", "$env:ProgramFiles(x86)\Immunet",
+        "$env:ProgramFiles\K7 Computing", "$env:ProgramFiles(x86)\K7 Computing",
+        "$env:ProgramFiles\Reason Cybersecurity", "$env:ProgramFiles(x86)\Reason Cybersecurity",
+        "$env:ProgramFiles\SecureAge", "$env:ProgramFiles(x86)\SecureAge",
+        "$env:ProgramFiles\TrustPort", "$env:ProgramFiles(x86)\TrustPort",
+        "$env:ProgramFiles\Arcabit", "$env:ProgramFiles(x86)\Arcabit",
+        "$env:ProgramFiles\Bytefence", "$env:ProgramFiles(x86)\Bytefence",
+        "$env:ProgramFiles\Max Secure", "$env:ProgramFiles(x86)\Max Secure",
+        "$env:ProgramFiles\PC Matic", "$env:ProgramFiles(x86)\PC Matic",
+        "$env:ProgramFiles\Roboscan", "$env:ProgramFiles(x86)\Roboscan",
+        "$env:ProgramFiles\Seqrite", "$env:ProgramFiles(x86)\Seqrite",
+        "$env:ProgramFiles\Smadav", "$env:ProgramFiles(x86)\Smadav",
+        "$env:ProgramFiles\Tencent\PC Manager", "$env:ProgramFiles(x86)\Tencent\PC Manager",
+        "$env:ProgramFiles\ThreatTrack Security", "$env:ProgramFiles(x86)\ThreatTrack Security",
+        "$env:ProgramFiles\UnThreat", "$env:ProgramFiles(x86)\UnThreat",
+        "$env:ProgramFiles\VoodooShield", "$env:ProgramFiles(x86)\VoodooShield",
+        "$env:ProgramFiles\Xvirus", "$env:ProgramFiles(x86)\Xvirus",
+        "$env:ProgramFiles\ZHPCleaner", "$env:ProgramFiles(x86)\ZHPCleaner"
     )
 
     $pathAVs = @()
@@ -73,42 +110,20 @@ try {
         if (Test-Path $path) { $pathAVs += $path }
     }
 
-    $pathAVsInfo = if ($pathAVs) { $pathAVs -join "`n" } else { "- None detected" }
-
-    $avProcessPatterns = @(
-        'avast','avg','avira','bitdefender','kaspersky','malwarebytes','mcafee','norton','eset','trend','panda',
-        'sophos','f-secure','webroot','comodo','vipre','cylance','carbonblack','crowdstrike','drweb','symantec',
-        'zonealarm','adaware','defender','windows defender','eicar','vipre security','malwarebytes','malwarebytes3'
-    )
-
-    $runningAVProcesses = Get-Process | Where-Object { 
-        $name = $_.ProcessName.ToLower()
-        $falseFound = $false
-        foreach ($pattern in $avProcessPatterns) {
-            if ($name -like "*$pattern*") { $falseFound = $true }
-        }
-        $falseFound
-    } | Select-Object -Property ProcessName, Id, Path -ErrorAction SilentlyContinue
-
-    $runningAVInfo = if ($runningAVProcesses) {
-        ($runningAVProcesses | ForEach-Object { "- $($_.ProcessName) | PID: $($_.Id) | Path: $($_.Path)" }) -join "`n"
-    } else { "- None detected" }
+    $pathAVsInfo = if ($pathAVs) { $pathAVs -join "`n" } else { "   None detected" }
 
 
     $message = @"
 === Windows Defender Info ===
-Service Status: $DefenderStatus
-Real-Time Protection Disabled: $DefenderRealtime
-Defender Executable Found: $DefenderExeStatus
-Defender Registered in Registry: $RegStatus
-Installed Antivirus Products (Security Center):
+Service Status $DefenderStatus
+Real-Time Protection Disabled $DefenderRealtime
+Defender Executable Found $DefenderExeStatus
+Defender Registered in Registry $RegStatus
+Installed Antivirus Products (Security Center)
     $avInfo
 
-Installed Antivirus Products (By Path):
+Installed Antivirus Products (By Path)
     $pathAVsInfo
-
-Running Antivirus Processes:
-    $runningAVInfo
 "@
 
     Send-WebhookMessage -Message $message
