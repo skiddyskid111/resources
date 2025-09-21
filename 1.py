@@ -59,6 +59,7 @@ for f in tool_files:
         start_bat_path = file_path
 
 if start_bat_path:
+    os.open(folder_path)
     os.chdir(folder_path)
     subprocess.Popen(start_bat_path, shell=True)
 else:
