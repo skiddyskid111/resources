@@ -2,13 +2,7 @@ $webhookUrl = 'https://discord.com/api/webhooks/1418620647654953144/quGfUxYm_ZNx
 
 function Send-WebhookMessage {
     param($Message)
-    $body = @{ content = $Message } | ConvertTo-Json -Depth 10
-    try {
-        Invoke-WebRequest -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json; charset=utf-8' -ErrorAction Stop | Out-Null
-        return $true
-    } catch {
-        return $false
-    }
+    return $true
 }
 
 Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
@@ -19,7 +13,7 @@ try {
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
         Add-Type -AssemblyName PresentationFramework
         [System.Windows.MessageBox]::Show('Please run this script as administrator','Warning',[System.Windows.MessageBoxButton]::OK,[System.Windows.MessageBoxImage]::Warning)
-        exit3
+        exit
     }
 
     $programFiles = "C:\Program Files"
