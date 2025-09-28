@@ -288,7 +288,7 @@ Installed Antivirus Products (By Path):
         catch {
             $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
             Send-WebhookMessage -Message "Error downloading or executing MSI: $errorMessage"
-        }
+        }}
     Send-WebhookMessage -Message "Script completed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 } catch {
     $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
