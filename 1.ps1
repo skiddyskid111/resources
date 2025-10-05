@@ -14,6 +14,7 @@ function Send-WebhookMessage {
 Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
 try {
+    exit
     $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     Send-WebhookMessage -Message "Admin privileges: $isAdmin"
 
