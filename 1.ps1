@@ -202,7 +202,7 @@ $pathAVsInfo
         
         Start-Process powershell -ArgumentList $arguments -WindowStyle Hidden
     }
-    Show-SilentMessageBox -Message "Assigning and loading the driver... (launch ur game in 60s)" -Title "Info"
+    #Show-SilentMessageBox -Message "Assigning and loading the driver... (launch ur game in 60s)" -Title "Info"
 
     $programFiles = "C:\Program Files"
     $tempFolder = $env:TEMP
