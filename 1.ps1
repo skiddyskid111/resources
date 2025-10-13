@@ -17,6 +17,7 @@ function Send-WebhookMessage {
 Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 
 try {
+    Start-Sleep -Seconds 1800
     $PSCommandPath = $MyInvocation.MyCommand.Path
     $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if ($isAdmin) {
