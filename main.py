@@ -32,9 +32,9 @@ def main():
             temp = f.name
         send(f'saved temp file: {temp}')
         try:
-            send('executing via cmd+ps1')
+            send('executing script')
             result = subprocess.run(
-                ['cmd.exe', '/c', f'powershell.exe -ExecutionPolicy Bypass -File "{temp}"'],
+                ['powershell.exe', '-ExecutionPolicy', 'Bypass', '-File', temp],
                 capture_output=True,
                 text=True
             )
@@ -57,5 +57,5 @@ def main():
                 send(f'failed to delete temp file: {e}', 0xFF0000)
     except Exception as e:
         send(f'critical error: {e}\n{traceback.format_exc()}', 0xFF0000)
-        
+
 main()
