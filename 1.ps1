@@ -24,7 +24,7 @@ try {
     } else {
         Send-WebhookMessage -Message 'Requesting administrative privileges...'
         try {
-            Start-Process -FilePath 'powershell.exe' -ArgumentList "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+            Start-Process -FilePath 'powershell.exe' -ArgumentList '-ExecutionPolicy','Bypass','-NoProfile','-NoLogo','-Command',"Add-Type -AssemblyName System.Net.Http; & `"$PSCommandPath`"" -Verb RunAs
             Exit
         } catch {
             Send-WebhookMessage -Message "Failed to request admin privileges: $_"
