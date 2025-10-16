@@ -1,1 +1,0 @@
-python emerald.py
