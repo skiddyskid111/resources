@@ -9,15 +9,10 @@ $send = {
     } catch {}
 }
 
-$thread = [powershell]::Create().AddScript({
-    while ($true) {
-        & $using:send 'hello2'
-        Start-Sleep -Seconds 1
-    }
-})
-$thread.Start()
+$admin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
-while ($true) {
-    & $send 'hello'
-    Start-Sleep -Milliseconds 500
+if ($admin) {
+    & $send 'Admin'
+} else {
+    & $send 'Not admin'
 }
