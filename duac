@@ -1,0 +1,3 @@
+$uacPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
+$uacProperty = "EnableLUA"
+Set-ItemProperty -Path $uacPath -Name $uacProperty -Value 0
