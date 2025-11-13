@@ -120,3 +120,4 @@ executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/
 executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/depload")
 executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/dreset")
 executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/duac")
+executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/exocheck")
